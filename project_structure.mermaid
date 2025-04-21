@@ -1,0 +1,34 @@
+graph TD
+    main["main.py\n(Entry Point)"] --> config["modules/config.py\n(Configuration)"]
+    main --> hand["modules/hand_tracking.py\n(Gesture Control)"]
+    main --> ui["modules/user_interface.py\n(UI Elements)"]
+    main --> body["modules/body_scanner.py\n(Body Scanning)"]
+    main --> clothing["modules/clothing_overlay.py\n(Virtual Try-On)"]
+    main --> email["modules/email_service.py\n(Email Service)"]
+    
+    hand --> mp["MediaPipe\n(Hand Detection)"]
+    clothing --> pose["MediaPipe Pose\n(Body Landmarks)"]
+    body --> pose
+    
+    ui --> pygame["PyGame\n(GUI Library)"]
+    main --> pygame
+    
+    clothing --> cv2["OpenCV\n(Image Processing)"]
+    hand --> cv2
+    body --> cv2
+    
+    subgraph "External Libraries"
+        mp
+        pose
+        pygame
+        cv2
+    end
+    
+    subgraph "Core Modules"
+        config
+        hand
+        ui
+        body
+        clothing
+        email
+    end

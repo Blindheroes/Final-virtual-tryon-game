@@ -1,0 +1,42 @@
+graph TD
+    A[Start] --> B[Welcome Screen]
+    B --> C[Choose Gender]
+    C --> D[Scan Body Type]
+    D --> E[Display Body with Clothes]
+    E --> F[Try Different Clothes]
+    F --> G[Save to Email]
+    G --> H[Decision Point]
+    H -->|Rescan| D
+    H -->|Exit| I[End]
+    
+    %% Additional interactions
+    E --> J[Adjust/Customize]
+    J --> E
+    F --> K[View from Different Angles]
+    K --> F
+    
+    %% Gesture Control
+    subgraph "Hand Gesture Controls"
+        GC1[Index Finger as Pointer]
+        GC2[Index + Little Finger for Selection]
+    end
+    
+    %% UI Components
+    subgraph "UI Screens"
+        B
+        C
+        D
+        E
+        F
+        G
+        H
+    end
+    
+    %% Clothing Options
+    subgraph "Clothing Categories"
+        CL1[Tops]
+        CL2[Bottoms]
+    end
+    
+    F --> CL1
+    F --> CL2

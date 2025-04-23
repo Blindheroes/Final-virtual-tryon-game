@@ -9,20 +9,20 @@ This project implements a virtual try-on system that uses a camera for input, ha
 ## Features
 
 - **Hand Gesture Control**:
+
   - Index finger as pointer
   - Index + little finger for selection
 
 - **User Flow**:
+
   - Welcome screen
   - Gender selection
-  - Body type scanning (simulated in MVP)
+  - Body type scanning (simulated in MVP so just random [thin, fat, obesity])
   - Virtual clothing try-on
-  - Navigation through different clothing options
   - Save results to email (simulated in MVP)
   - Option to rescan or exit
 
 - **Clothing Options**:
-  - Multiple tops and bottoms for both male and female
   - Real-time overlay on user's body
 
 ## Technologies Used
@@ -35,44 +35,64 @@ This project implements a virtual try-on system that uses a camera for input, ha
 ## Installation
 
 1. Clone this repository:
+
    ```
-   git clone https://github.com/yourusername/virtual-tryon-game.git
+   git clone https://github.com/username/virtual-tryon-game.git
    cd virtual-tryon-game
    ```
 
-2. Install required packages:
+2. Install the required dependencies:
+
    ```
-   pip install opencv-python mediapipe pygame numpy
+   pip install -r requirements.txt
    ```
 
-3. Run the application:
+3. Ensure you have a camera (webcam) connected to your computer
+
+4. Run the application:
    ```
    python main.py
    ```
 
 ## Project Structure
 
-- `main.py`: Application entry point and main loop
-- `modules/`:
-  - `hand_tracking.py`: Hand gesture detection and interaction
-  - `body_scanner.py`: Body type recognition (simulated)
-  - `clothing_overlay.py`: Virtual try-on functionality
-  - `user_interface.py`: UI components and screens
-  - `email_service.py`: Email functionality (simulated)
-  - `config.py`: Configuration settings
+```
+|-- main.py                  # Entry point for the application
+|-- requirements.txt         # Dependencies list
+|-- game_flow.mermaid        # Game flow diagram
+|-- project_structure.mermaid # Project structure diagram
+|-- readme.md                # This documentation
+|-- clothing/                # Clothing asset directory
+|   |-- tops/                # Top clothing assets
+|   |   |-- male/            # Male tops
+|   |   |-- female/          # Female tops
+|   |-- bottoms/             # Bottom clothing assets
+|       |-- male/            # Male bottoms
+|       |-- female/          # Female bottoms
+|-- fonts/                   # Custom Montserrat font files
+|-- modules/                 # Core modules
+    |-- __init__.py          # Module initialization
+    |-- body_scanner.py      # Body scanning functionality
+    |-- clothing_overlay.py  # Virtual try-on overlay
+    |-- config.py            # Configuration settings
+    |-- email_service.py     # Email service for saving results
+    |-- hand_tracking.py     # Hand gesture control
+    |-- user_interface.py    # User interface elements
+```
 
 ## How to Use
 
-1. Launch the application and stand in front of the camera
+1. Launch the application and stand in front of the camera, be sure your hand and body are visible
 2. Use your index finger as a pointer to navigate
-3. Extend both index and little fingers to select an option
-4. Follow the on-screen prompts to select gender and try on different clothing items
-5. Use the navigation buttons to cycle through different clothing options
-6. Save your results or exit when finished
+3. Extend both index and little fingers to select (like a left click on mouse) an option
+4. Follow the on-screen prompts to select gender and wait sytem to scan your body type
+5. rescan if you want to
+6. Save your results, back to menu, or exit when finished
 
 ## Notes for MVP
 
 This is a Minimum Viable Product (MVP) with the following limitations:
+
 - Body scanning is simulated (no actual measurements)
 - Clothing items are simplified placeholders
 - Email functionality is simulated (not actually sending emails)

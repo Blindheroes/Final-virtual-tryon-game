@@ -82,6 +82,9 @@ class VirtualTryOnGame:
                 self.current_screen = "try_on"
 
         elif self.current_screen == "try_on":
+            # Get body measurements
+            measurements = self.body_scanner.get_measurements()
+            
             # Apply clothing overlay
             frame = self.clothing_overlay.apply_clothing(
                 frame,
@@ -92,7 +95,13 @@ class VirtualTryOnGame:
 
             # Draw UI elements for try-on screen
             self.ui.draw_try_on_screen(
-                frame, self.pointer_pos, self.is_selecting)
+                frame, 
+                self.pointer_pos, 
+                self.is_selecting,
+                self.gender,
+                self.body_type,
+                measurements
+            )
 
         # Draw pointer
         if self.pointer_pos:
@@ -116,7 +125,7 @@ class VirtualTryOnGame:
                 if selected:
                     self.gender = selected
                     self.current_screen = "scanning"
-                    self.body_scanner.start_scan()
+                    self.body_scanner.start_scan(self.gender)
 
             elif self.current_screen == "try_on":
                 action = self.ui.get_try_on_action(self.pointer_pos)
@@ -133,7 +142,7 @@ class VirtualTryOnGame:
                     pass
                 elif action == "rescan":
                     self.current_screen = "scanning"
-                    self.body_scanner.start_scan()
+                    self.body_scanner.start_scan(self.gender)
                 elif action == "exit":
                     self.is_running = False
 

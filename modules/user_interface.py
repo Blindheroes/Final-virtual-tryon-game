@@ -62,7 +62,7 @@ class Button:
         }
         self.color_scheme = color_scheme
         self.corner_radius = min(10, height // 3)  # Rounded corners
-        self.border_thickness = 2
+        self.border_thickness = 1
 
         # Animation properties
         self.animation_state = 0.0  # 0.0 to 1.0
@@ -309,11 +309,11 @@ class UserInterface:
             try:
                 # Load different font weights
                 self.font_regular = pygame.font.Font(
-                    str(font_dir / "Montserrat-Regular.ttf"), 24)
+                    str(font_dir / "Montserrat-Regular.ttf"), 11)
                 self.font_bold = pygame.font.Font(
-                    str(font_dir / "Montserrat-Bold.ttf"), 24)
+                    str(font_dir / "Montserrat-Bold.ttf"), 11)
                 self.font_light = pygame.font.Font(
-                    str(font_dir / "Montserrat-Light.ttf"), 24)
+                    str(font_dir / "Montserrat-Light.ttf"), 11)
                 self.use_custom_font = True
                 print("Montserrat font loaded successfully")
             except Exception as e:
@@ -530,6 +530,32 @@ class UserInterface:
         """Initialize try-on screen UI elements with bordered style buttons"""
         button_height = 50
 
+        # Move action buttons to the top with equal spacing
+        action_button_width = 120
+        action_button_height = 50
+        button_spacing = (self.width - (3 * action_button_width)) // 4
+        top_margin = 30
+
+        # Save, Rescan, and Exit buttons with appropriate colors - now at the top
+        self.save_button = Button(
+            button_spacing,
+            top_margin,
+            action_button_width, action_button_height, "SAVE", "save",
+            color_scheme="purple", style="bordered"
+        )
+        self.rescan_button = Button(
+            button_spacing * 2 + action_button_width,
+            top_margin,
+            action_button_width, action_button_height, "RESCAN", "rescan",
+            color_scheme="dark-blue", style="bordered"
+        )
+        self.exit_button = Button(
+            button_spacing * 3 + action_button_width * 2,
+            top_margin,
+            action_button_width, action_button_height, "EXIT", "exit",
+            color_scheme="red", style="bordered"
+        )
+
         # Navigation buttons with better sizing and style matching the image
         nav_button_width = 120
 
@@ -555,32 +581,6 @@ class UserInterface:
             self.width - nav_button_width - 30, self.height // 2 + 30,
             nav_button_width, button_height, "Next", "next_bottom",
             color_scheme="blue", style="bordered"
-        )
-
-        # Action buttons at the bottom with equal spacing
-        action_button_width = 120
-        action_button_height = 50
-        button_spacing = (self.width - (3 * action_button_width)) // 4
-        bottom_margin = 30
-
-        # Save, Rescan, and Exit buttons with appropriate colors
-        self.save_button = Button(
-            button_spacing,
-            self.height - action_button_height - bottom_margin,
-            action_button_width, action_button_height, "SAVE", "save",
-            color_scheme="purple", style="bordered"
-        )
-        self.rescan_button = Button(
-            button_spacing * 2 + action_button_width,
-            self.height - action_button_height - bottom_margin,
-            action_button_width, action_button_height, "RESCAN", "rescan",
-            color_scheme="dark-blue", style="bordered"
-        )
-        self.exit_button = Button(
-            button_spacing * 3 + action_button_width * 2,
-            self.height - action_button_height - bottom_margin,
-            action_button_width, action_button_height, "EXIT", "exit",
-            color_scheme="red", style="bordered"
         )
 
     def draw_welcome_screen(self, frame):
@@ -629,9 +629,9 @@ class UserInterface:
                     (title_x + 30, subtitle_y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 1)
 
-        # Add visual hand gesture help
-        self._draw_hand_gesture_help(
-            frame, self.width // 2 - 100, panel_y + panel_height + 20)
+        # # Add visual hand gesture help
+        # self._draw_hand_gesture_help(
+        #     frame, self.width // 2 - 100, panel_y + panel_height + 20)
 
         # Draw pulsing start button with animation
         self.start_button.draw(frame)
@@ -674,26 +674,26 @@ class UserInterface:
                     (title_x, title_y),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
 
-        # Add icons or silhouettes for male/female
-        male_icon_x = self.width // 4
-        female_icon_x = 3 * self.width // 4
-        icon_y = self.height // 2 - 120
-        icon_size = 100
+        # # Add icons or silhouettes for male/female
+        # male_icon_x = self.width // 4
+        # female_icon_x = 3 * self.width // 4
+        # icon_y = self.height // 2 - 120
+        # icon_size = 100
 
-        # Male icon (simplified)
-        cv2.rectangle(frame, (male_icon_x - icon_size//2, icon_y),
-                      (male_icon_x + icon_size//2, icon_y + icon_size), (255, 0, 0), 2)
+        # # Male icon (simplified)
+        # cv2.rectangle(frame, (male_icon_x - icon_size//2, icon_y),
+        #               (male_icon_x + icon_size//2, icon_y + icon_size), (255, 0, 0), 2)
 
-        # Female icon (simplified)
-        cv2.circle(frame, (female_icon_x, icon_y + icon_size//2),
-                   icon_size//2, (255, 0, 255), 2)
+        # # Female icon (simplified)
+        # cv2.circle(frame, (female_icon_x, icon_y + icon_size//2),
+        #            icon_size//2, (255, 0, 255), 2)
 
         # Draw gender buttons
         self.male_button.draw(frame, pointer_pos, is_selecting)
         self.female_button.draw(frame, pointer_pos, is_selecting)
 
-        # Add visual hand gesture help in the bottom corner
-        self._draw_hand_gesture_help(frame, 20, self.height - 100)
+        # # Add visual hand gesture help in the bottom corner
+        # self._draw_hand_gesture_help(frame, 20, self.height - 100)
 
     def draw_scanning_screen(self, frame, scan_complete):
         """Draw the body scanning screen with improved animation"""
@@ -793,7 +793,7 @@ class UserInterface:
                            int(check_y - check_size * 0.5 * pt3_prog))
                     cv2.line(frame, pt2, pt3, (0, 255, 0), 3)
 
-    def draw_try_on_screen(self, frame, pointer_pos, is_selecting):
+    def draw_try_on_screen(self, frame, pointer_pos, is_selecting, gender=None, body_type=None, measurements=None):
         """Draw the try-on screen with improved clothing navigation controls"""
         # Add dark semi-transparent overlay for better contrast
         overlay = frame.copy()
@@ -806,7 +806,7 @@ class UserInterface:
         if self.use_custom_font:
             # Use custom Montserrat font for the title
             self.draw_text_with_font(
-                frame, title_text, (self.width//2-150, 140), 92, (255, 255, 255), True)
+                frame, title_text, (self.width//2-150, 140), 24, (255, 255, 255), True)
         else:
             # Fall back to OpenCV text
             text_size = cv2.getTextSize(
@@ -816,60 +816,64 @@ class UserInterface:
             cv2.putText(frame, title_text, (title_x, 140),
                         cv2.FONT_HERSHEY_SIMPLEX, 2.5, (255, 255, 255), 5)
 
-        # Draw hand gesture guide in the top-right corner as shown in the image
-        guide_x = self.width - 150
-        guide_y = 100
-        guide_width = 120
-        guide_height = 80
+        # # Draw hand gesture guide in the top-right corner as shown in the image
+        # guide_x = self.width - 150
+        # guide_y = 100
+        # guide_width = 120
+        # guide_height = 80
 
-        # Create background for the guide
-        cv2.rectangle(frame, (guide_x, guide_y), (guide_x + guide_width, guide_y + guide_height),
-                      (0, 0, 0), -1)
-        cv2.rectangle(frame, (guide_x, guide_y), (guide_x + guide_width, guide_y + guide_height),
-                      (255, 255, 255), 1)
+        # # Create background for the guide
+        # cv2.rectangle(frame, (guide_x, guide_y), (guide_x + guide_width, guide_y + guide_height),
+        #               (0, 0, 0), -1)
+        # cv2.rectangle(frame, (guide_x, guide_y), (guide_x + guide_width, guide_y + guide_height),
+        #               (255, 255, 255), 1)
 
-        # Add text for the guide
-        if self.use_custom_font:
-            self.draw_text_with_font(
-                frame, "Point:", (guide_x + 10, guide_y + 20), 18, (255, 255, 255), True)
-            self.draw_text_with_font(
-                frame, "Select:", (guide_x + 10, guide_y + 50), 18, (255, 255, 255), True)
-        else:
-            cv2.putText(frame, "Point:", (guide_x + 10, guide_y + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            cv2.putText(frame, "Select:", (guide_x + 10, guide_y + 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # # Add text for the guide
+        # if self.use_custom_font:
+        #     self.draw_text_with_font(
+        #         frame, "Point:", (guide_x + 10, guide_y + 20), 18, (255, 255, 255), True)
+        #     self.draw_text_with_font(
+        #         frame, "Select:", (guide_x + 10, guide_y + 50), 18, (255, 255, 255), True)
+        # else:
+        #     cv2.putText(frame, "Point:", (guide_x + 10, guide_y + 20),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        #     cv2.putText(frame, "Select:", (guide_x + 10, guide_y + 50),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        # Draw the gesture indicators (circles)
-        cv2.circle(frame, (guide_x + 90, guide_y + 15), 8,
-                   (255, 255, 255), -1)  # Point indicator
-        cv2.circle(frame, (guide_x + 90, guide_y + 45), 8,
-                   (255, 255, 255), -1)  # Select indicator
+        # # Draw the gesture indicators (circles)
+        # cv2.circle(frame, (guide_x + 90, guide_y + 15), 8,
+        #            (255, 255, 255), -1)  # Point indicator
+        # cv2.circle(frame, (guide_x + 90, guide_y + 45), 8,
+        #            (255, 255, 255), -1)  # Select indicator
 
-        # Draw clothing navigation buttons
-        self.prev_top_button.draw(frame, pointer_pos, is_selecting)
-        self.next_top_button.draw(frame, pointer_pos, is_selecting)
-        self.prev_bottom_button.draw(frame, pointer_pos, is_selecting)
-        self.next_bottom_button.draw(frame, pointer_pos, is_selecting)
+        # Draw body info panel if information is available
+        if gender and body_type and measurements:
+            self._draw_body_info_panel(frame, gender, body_type, measurements)
 
-        # Add labels for navigation - positioned as in the image
-        if self.use_custom_font:
-            # Use larger font for TOPS and BOTTOMS labels
-            self.draw_text_with_font(frame, "TOPS",
-                                     (self.width // 2 - 50, self.height // 3 - 10),
-                                     36, (255, 255, 255), True)
+        # # Draw clothing navigation buttons
+        # self.prev_top_button.draw(frame, pointer_pos, is_selecting)
+        # self.next_top_button.draw(frame, pointer_pos, is_selecting)
+        # self.prev_bottom_button.draw(frame, pointer_pos, is_selecting)
+        # self.next_bottom_button.draw(frame, pointer_pos, is_selecting)
 
-            self.draw_text_with_font(frame, "BOTTOMS",
-                                     (self.width // 2 - 80, self.height // 2 + 50),
-                                     36, (255, 255, 255), True)
-        else:
-            cv2.putText(frame, "TOPS",
-                        (self.width // 2 - 50, self.height // 3 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        # # Add labels for navigation - positioned as in the image
+        # if self.use_custom_font:
+        #     # Use larger font for TOPS and BOTTOMS labels
+        #     self.draw_text_with_font(frame, "TOPS",
+        #                              (self.width // 2 - 50, self.height // 3 - 10),
+        #                              36, (255, 255, 255), True)
 
-            cv2.putText(frame, "BOTTOMS",
-                        (self.width // 2 - 80, self.height // 2 + 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        #     self.draw_text_with_font(frame, "BOTTOMS",
+        #                              (self.width // 2 - 80, self.height // 2 + 50),
+        #                              36, (255, 255, 255), True)
+        # else:
+        #     cv2.putText(frame, "TOPS",
+        #                 (self.width // 2 - 50, self.height // 3 - 10),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+
+        #     cv2.putText(frame, "BOTTOMS",
+        #                 (self.width // 2 - 80, self.height // 2 + 50),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
         # Draw action buttons at the bottom
         self.save_button.draw(frame, pointer_pos, is_selecting)
@@ -887,8 +891,8 @@ class UserInterface:
     def get_try_on_action(self, pointer_pos):
         """Check if any button in try-on screen is selected"""
         buttons = [
-            self.prev_top_button, self.next_top_button,
-            self.prev_bottom_button, self.next_bottom_button,
+            # self.prev_top_button, self.next_top_button,
+            # self.prev_bottom_button, self.next_bottom_button,
             self.save_button, self.rescan_button, self.exit_button
         ]
 
@@ -897,3 +901,54 @@ class UserInterface:
                 return button.action
 
         return None
+
+    def _draw_body_info_panel(self, frame, gender, body_type, measurements):
+        """Draw panel showing body type and measurements at the bottom of the screen"""
+        # Create panel for body information - now centered at the bottom
+        panel_width = 220
+        panel_height = 150
+        panel_x = (self.width - panel_width) // 2  # Centered horizontally
+        panel_y = self.height - panel_height - 20  # At the bottom
+
+        # Create semi-transparent panel
+        self._create_panel(frame, panel_x, panel_y,
+                           panel_width, panel_height, 0.8)
+
+        # Panel title
+        if self.use_custom_font:
+            self.draw_text_with_font(
+                frame, "BODY INFO", (panel_x + 10, panel_y + 30), 12, (255, 255, 255), True)
+        else:
+            cv2.putText(frame, "BODY INFO", (panel_x + 10, panel_y + 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+        # Display gender and body type
+        gender_text = f"Gender: {gender.title()}"
+        type_text = f"Type: {body_type.title()}"
+
+        if self.use_custom_font:
+            self.draw_text_with_font(
+                frame, gender_text, (panel_x + 15, panel_y + 60), 10, (220, 220, 220))
+            self.draw_text_with_font(
+                frame, type_text, (panel_x + 15, panel_y + 85), 10, (220, 220, 220))
+        else:
+            cv2.putText(frame, gender_text, (panel_x + 15, panel_y + 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 220, 220), 1)
+            cv2.putText(frame, type_text, (panel_x + 15, panel_y + 85),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 220, 220), 1)
+
+        # Display key measurements
+        y_pos = panel_y + 110
+        key_measurements = ["shoulder_width", "chest", "waist"]
+
+        for key in key_measurements:
+            if key in measurements:
+                measurement_text = f"{key.replace('_', ' ').title()}: {measurements[key]} cm"
+
+                if self.use_custom_font:
+                    self.draw_text_with_font(
+                        frame, measurement_text, (panel_x + 15, y_pos), 10, (220, 220, 220))
+                else:
+                    cv2.putText(frame, measurement_text, (panel_x + 15, y_pos),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1)
+                y_pos += 25

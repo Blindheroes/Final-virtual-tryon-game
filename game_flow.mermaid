@@ -1,19 +1,30 @@
 graph TD
-    A[Start] --> B[Welcome Screen]
-    B --> C[Choose Gender]
-    C --> D[Scan Body Type]
-    D --> F[Display Body with Clothes]
-    F --> G[Save to Email]
-    G --> H[Decision Point]
-    H -->|Rescan| D
-    H -->|Exit| I[End]
+    A[Start] --> B[Calibration]
+    B --> C[Main Menu]
+    C --> D[Body Scan]
+    C --> E[Voice Assistant]
+    D --> F[Virtual Try-on]
+    E --> F
+    F --> G[Decision Point]
+    G -->|Back to Main Menu| C
+    G -->|Recalibrate| B
+    G -->|Exit| H[End]
     
-    %% Additional interactions
+    %% Explicit connections for the requested flow
+    %% calibraton -> main menu -> body scan or voice asistent -> virtual tryon -> back to main menu or calibration
+    B -->|After calibration| C
+    C -->|Option 1| D
+    C -->|Option 2| E
+    D -->|Complete| F
+    E -->|Complete| F
+    F -->|Return| C
+    F -->|Recalibrate| B
     
     %% Gesture Control
     subgraph "Hand Gesture Controls"
         GC1[Index Finger as Pointer]
         GC2[Index + Little Finger for Selection -left click-]
+        GC3[Open Palm for Reset]
     end
     
     %% UI Components
@@ -22,15 +33,7 @@ graph TD
         C
         D
         E
+        F
         G
-        H
     end
-    
-    %% Clothing Options
-    subgraph "Clothing Categories"
-        CL1[Tops]
-        CL2[Bottoms]
-    end
-    
-    F --> CL1
-    F --> CL2
+

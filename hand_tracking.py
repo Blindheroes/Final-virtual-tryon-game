@@ -63,6 +63,7 @@ class HandTracker:
         index_tip = hand_landmarks.landmark[8]
 
         # Convert normalized coordinates to pixel coordinates
+        
         x = int(index_tip.x * self.frame_width)
         y = int(index_tip.y * self.frame_height)
 

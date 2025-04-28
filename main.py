@@ -41,7 +41,7 @@ class VirtualTryOnGame:
 
         # Window settings
         self.window_name = "Virtual Try-On"
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        # cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
         # Get screen dimensions for better positioning
         screen_width = 1280  # Default fallback width
@@ -61,9 +61,10 @@ class VirtualTryOnGame:
         # Maintain 9:16 aspect ratio
         window_width = int(window_height * (9/16))
 
+        # kalo gambar strached, di comment aja
         # cv2.resizeWindow(self.window_name, window_width, window_height)
         # Center horizontally
-        cv2.moveWindow(self.window_name, (screen_width - window_width) // 2, 0)
+        # cv2.moveWindow(self.window_name, (screen_width - window_width) // 2, 0)
 
         # Toggle fullscreen if needed
         self.fullscreen = False
@@ -352,8 +353,8 @@ class VirtualTryOnGame:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # Create vertical display (9:16 aspect ratio)
-            vertical_frame = create_vertical_display(frame)
-            # vertical_frame = frame
+            # vertical_frame = create_vertical_display(frame)
+            vertical_frame = frame
 
             # Save original dimensions before processing for coordinate mapping
             frame_h, frame_w = vertical_frame.shape[:2]

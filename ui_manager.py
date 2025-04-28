@@ -30,12 +30,12 @@ class UIManager:
         # Define button areas for different screens (x, y, width, height)
         self.buttons = {
             # Calibration screen
-            "calibration_complete": (20, 350, 200, 50),
+            "calibration_complete": (30, 300, 200, 25),
 
             # Main menu
-            "body_scan": (250, 300, 280, 80),
-            "voice_assistant": (250, 400, 280, 80),
-            "exit": (250, 500, 280, 80),
+            "body_scan": (20, 300, 280, 80),
+            "voice_assistant": (20, 400, 280, 80),
+            "exit": (20, 500, 280, 80),
 
             # Gender select
             "male": (175, 400, 200, 80),
@@ -131,33 +131,94 @@ class UIManager:
         if button_name not in self.buttons:
             return frame
 
+        h, w = frame.shape[:2]
         btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
         color = self.highlight_color if active else self.secondary_color
 
-        # Draw rounded button rectangle
-        cv2.rectangle(frame, (btn_x, btn_y), (btn_x + btn_w,
-                      btn_y + btn_h), color, cv2.FILLED, cv2.LINE_AA)
-        cv2.rectangle(frame, (btn_x, btn_y), (btn_x + btn_w,
-                      btn_y + btn_h), (255, 255, 255), 2, cv2.LINE_AA)
+        # Check if button is completely outside the frame
+        # Only return if the button is 100% outside the visible area
+        if btn_x >= w or btn_y >= h or btn_x + btn_w <= 0 or btn_y + btn_h <= 0:
+            return frame  # Button is completely outside, skip drawing
+
+        # Adjust button coordinates if it's partially outside the frame
+        x_start = max(0, btn_x)
+        y_start = max(0, btn_y)
+        x_end = min(w, btn_x + btn_w)
+        y_end = min(h, btn_y + btn_h)
+
+        # Calculate actual visible button dimensions
+        visible_width = x_end - x_start
+        visible_height = y_end - y_start
+
+        if visible_width <= 0 or visible_height <= 0:
+            return frame  # No visible part of the button
+
+        # Create a mask for rounded corners (for the original button size)
+        mask = np.zeros((btn_h, btn_w), dtype=np.uint8)
+        radius = 15  # Corner radius
+
+        # Draw filled rectangle on mask
+        cv2.rectangle(mask, (radius, 0), (btn_w - radius, btn_h), 255, -1)
+        cv2.rectangle(mask, (0, radius), (btn_w, btn_h - radius), 255, -1)
+
+        # Draw the four corner circles on mask
+        cv2.circle(mask, (radius, radius), radius, 255, -1)
+        cv2.circle(mask, (btn_w - radius, radius), radius, 255, -1)
+        cv2.circle(mask, (radius, btn_h - radius), radius, 255, -1)
+        cv2.circle(mask, (btn_w - radius, btn_h - radius), radius, 255, -1)
+
+        # Crop the mask to match the visible portion of the button
+        mask_x_offset = x_start - btn_x
+        mask_y_offset = y_start - btn_y
+        visible_mask = mask[mask_y_offset:mask_y_offset + visible_height,
+                            mask_x_offset:mask_x_offset + visible_width]
+
+        # Create inverse mask for the visible portion
+        mask_inv = cv2.bitwise_not(visible_mask)
+
+        # Extract region of interest from the original image
+        roi = frame[y_start:y_end, x_start:x_end]
+
+        # Create colored button image for the visible portion
+        button = np.ones((visible_height, visible_width, 3), dtype=np.uint8)
+        button[:] = color
+
+        # Apply mask to button
+        masked_button = cv2.bitwise_and(button, button, mask=visible_mask)
+
+        # Get background from ROI using inverse mask
+        roi_bg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+
+        # Add button and background together
+        dst = cv2.add(roi_bg, masked_button)
+
+        # Copy result back to original image
+        frame[y_start:y_end, x_start:x_end] = dst
 
         # Add text if provided
         if text:
+            # Calculate original text position (center of full button)
             if self.custom_font_available:
-                # Calculate text position for the PIL version
-                text_size = 28
+                text_size = 14
                 # Rough estimate of text width for centering
                 text_width = len(text) * text_size * 0.6
                 text_x = btn_x + (btn_w - text_width) // 2
                 text_y = btn_y + (btn_h - text_size) // 2
-                frame = self._put_text_with_custom_font(
-                    frame, text, (text_x, text_y), text_size, self.text_color)
+
+                # Check if text is in the visible area
+                if x_start <= text_x < x_end and y_start <= text_y < y_end:
+                    frame = self._put_text_with_custom_font(
+                        frame, text, (text_x, text_y), text_size, self.text_color)
             else:
                 text_size = cv2.getTextSize(
                     text, self.font, self.font_scale, self.font_thickness)[0]
                 text_x = btn_x + (btn_w - text_size[0]) // 2
                 text_y = btn_y + (btn_h + text_size[1]) // 2
-                cv2.putText(frame, text, (text_x, text_y), self.font,
-                            self.font_scale, self.font_color, self.font_thickness, cv2.LINE_AA)
+
+                # Check if text is in the visible area
+                if x_start <= text_x < x_end and y_start <= text_y < y_end:
+                    cv2.putText(frame, text, (text_x, text_y), self.font,
+                                self.font_scale, self.font_color, self.font_thickness, cv2.LINE_AA)
 
         return frame
 
@@ -275,12 +336,14 @@ class UIManager:
             button_active = self.is_within_button(x, y, "calibration_complete")
 
             # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            cv2.circle(ui_frame, pointer_pos, 2,
+                       (255, 255, 255), -1)  # White center dot
             if button_active:
-                # Draw a larger cursor for active button
-                cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
+                # Draw a larger cursor for active button (red)
+                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
             else:
-                cv2.circle(ui_frame, pointer_pos, 10, (255, 0, 0), 2)
+                cv2.circle(ui_frame, pointer_pos, 10,
+                           (255, 255, 255), 2)  # White circle
 
         # Draw calibration complete button
         self._draw_button(ui_frame, "calibration_complete",
@@ -322,9 +385,9 @@ class UIManager:
             voice_active = self.is_within_button(x, y, "voice_assistant")
             exit_active = self.is_within_button(x, y, "exit")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            # Draw a cursor with white color
+            cv2.circle(ui_frame, pointer_pos, 10, (255, 255, 255), 2)
+            cv2.circle(ui_frame, pointer_pos, 2, (255, 255, 255), -1)
 
         # Draw buttons
         self._draw_button(ui_frame, "body_scan", "Body Scan", body_scan_active)
@@ -349,8 +412,6 @@ class UIManager:
                       (icon_x+17, icon_y+40), (255, 255, 255), cv2.FILLED)
 
         return ui_frame
-
-    # ...other screen drawing methods remain similar but updated with custom fonts...
 
     def draw_gender_select(self, frame, pointer_pos=None):
         """Draw the gender selection screen"""
@@ -387,8 +448,14 @@ class UIManager:
             back_active = self.is_within_button(x, y, "back")
 
             # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            cv2.circle(ui_frame, pointer_pos, 2,
+                       (255, 255, 255), -1)  # White center dot
+            if male_active or female_active or back_active:
+                # Draw a larger cursor for active button (red)
+                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
+            else:
+                cv2.circle(ui_frame, pointer_pos, 10,
+                           (255, 255, 255), 2)  # White circle
 
         # Draw buttons
         self._draw_button(ui_frame, "male", "Male", male_active)
@@ -489,8 +556,14 @@ class UIManager:
             back_active = self.is_within_button(x, y, "back")
 
             # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            cv2.circle(ui_frame, pointer_pos, 2,
+                       (255, 255, 255), -1)  # White center dot
+            if continue_active or back_active:
+                # Draw a larger cursor for active button (red)
+                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
+            else:
+                cv2.circle(ui_frame, pointer_pos, 10,
+                           (255, 255, 255), 2)  # White circle
 
         # Draw buttons
         self._draw_button(ui_frame, "continue", "Continue", continue_active)
@@ -570,9 +643,15 @@ class UIManager:
             continue_active = self.is_within_button(x, y, "continue")
             back_active = self.is_within_button(x, y, "back")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            # Draw a cursor with white color
+            cv2.circle(ui_frame, pointer_pos, 2,
+                       (255, 255, 255), -1)  # White center dot
+            if continue_active or back_active:
+                # Draw a larger cursor for active button (red)
+                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
+            else:
+                cv2.circle(ui_frame, pointer_pos, 10,
+                           (255, 255, 255), 2)  # White circle
 
         # Draw buttons
         self._draw_button(ui_frame, "continue", "Continue", continue_active)

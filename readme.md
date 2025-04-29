@@ -30,6 +30,19 @@ This project implements a virtual try-on system that uses a camera for input, ha
   - virtual tryon recomended apparel based on body type (scan) or voice asistent
   - back to main menu, calibration, or exit
 
+## User Interface Settings
+- frame and window size = 640x480
+- title font size = 0.7
+- text font scale = 0.45
+- text color = white
+- opacity = 0.6
+- button style = round
+- button color = white
+- button color selected = green
+- text color on button = black
+- remove all icons
+- use default font
+- make sure the button is clickable
 
 ## Technologies Used
 

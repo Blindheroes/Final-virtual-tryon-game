@@ -68,9 +68,9 @@ class VirtualTryOnGame:
 
         # Toggle fullscreen if needed
         self.fullscreen = False
-        if self.fullscreen:
-            cv2.setWindowProperty(
-                self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        # if self.fullscreen:
+        #     cv2.setWindowProperty(
+        #         self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
         # Load audio
         self.sound_select = pygame.mixer.Sound(
@@ -221,7 +221,10 @@ class VirtualTryOnGame:
     def handle_body_scan(self, frame, pointer_pos, is_selecting):
         """Handle body scan screen and classification"""
         # Classify body type using body classifier
-        self.body_type = self.body_classifier.process_frame(frame)
+        # Use the correct methods from BodyClassifier
+        landmarks_results = self.body_classifier.detect_body_landmarks(frame)
+        self.body_type, processed_frame = self.body_classifier.classify_body_type(
+            landmarks_results, frame, self.gender)
 
         ui_frame = self.ui_manager.draw_body_scan(
             frame, pointer_pos, self.body_type)
@@ -239,7 +242,7 @@ class VirtualTryOnGame:
                         self.sound_select.play()
                     self.current_screen = "virtual_tryon"
 
-                elif self.ui_manager.is_within_button(x, y, "back"):
+                elif self.ui_manager.is_within_button(x, y, "back_from_scan"):
                     self.last_select_time = current_time
                     print("Back to gender select")
                     if self.sound_select:
@@ -282,14 +285,44 @@ class VirtualTryOnGame:
 
     def handle_virtual_tryon(self, frame, pointer_pos, is_selecting):
         """Handle virtual try-on screen"""
-        # Apply clothing overlay based on body type and gender
-        tryon_frame = self.clothing_overlay.apply_clothing(
-            frame,
-            self.body_type,
-            self.gender
-        )
+        # First, load clothing options for the detected body type and gender
+        # This only needs to be done once when entering this screen
+        if not hasattr(self, 'clothing_loaded') or not self.clothing_loaded:
+            print("Loading clothing options for", self.gender, self.body_type)
+            self.clothing_overlay.load_clothing_options(
+                self.gender, self.body_type)
+            # Create a flag to track if clothing is loaded
+            self.clothing_loaded = True
+            # Set the active clothing type (top or bottom)
+            self.active_clothing_type = 'top'
 
-        ui_frame = self.ui_manager.draw_virtual_tryon(tryon_frame, pointer_pos)
+        # Get body landmarks for better clothing placement
+        landmarks_results = self.body_classifier.detect_body_landmarks(frame)
+
+        # Apply clothing overlay based on body type and gender
+        # Pass the landmarks_results to ensure clothing follows body movements
+        tryon_frame = self.clothing_overlay.overlay_clothing(
+            frame, landmarks_results)
+
+        ui_frame = self.ui_manager.draw_virtual_tryon(
+            tryon_frame, pointer_pos, self.active_clothing_type)
+
+        # Add gesture controls for clothing navigation
+        is_pointing = self.hand_tracker.is_pointing()
+        is_open_palm = self.hand_tracker.is_open_palm()
+
+        # Use hand gestures to cycle through clothing options
+        current_time = time.time()
+        if current_time - self.last_select_time >= self.select_cooldown:
+            if is_open_palm and is_pointing:
+                self.clothing_overlay.next_clothing(self.active_clothing_type)
+                self.last_select_time = current_time
+                print(f"Next {self.active_clothing_type} item")
+            elif is_open_palm and not is_pointing:
+                self.clothing_overlay.previous_clothing(
+                    self.active_clothing_type)
+                self.last_select_time = current_time
+                print(f"Previous {self.active_clothing_type} item")
 
         # Check for button presses
         if is_selecting and pointer_pos:
@@ -297,12 +330,28 @@ class VirtualTryOnGame:
             current_time = time.time()
 
             if current_time - self.last_select_time >= self.select_cooldown:
-                if self.ui_manager.is_within_button(x, y, "main_menu"):
+                if self.ui_manager.is_within_button(x, y, "top_select"):
+                    self.last_select_time = current_time
+                    print("Switch to top selection")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.active_clothing_type = 'top'
+
+                elif self.ui_manager.is_within_button(x, y, "bottom_select"):
+                    self.last_select_time = current_time
+                    print("Switch to bottom selection")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.active_clothing_type = 'bottom'
+
+                elif self.ui_manager.is_within_button(x, y, "main_menu"):
                     self.last_select_time = current_time
                     print("Back to main menu")
                     if self.sound_select:
                         self.sound_select.play()
                     self.current_screen = "main_menu"
+                    # Reset clothing loaded flag when leaving the screen
+                    self.clothing_loaded = False
 
                 elif self.ui_manager.is_within_button(x, y, "recalibrate"):
                     self.last_select_time = current_time
@@ -310,6 +359,8 @@ class VirtualTryOnGame:
                     if self.sound_select:
                         self.sound_select.play()
                     self.current_screen = "calibration"
+                    # Reset clothing loaded flag when leaving the screen
+                    self.clothing_loaded = False
 
                 elif self.ui_manager.is_within_button(x, y, "exit"):
                     self.last_select_time = current_time
@@ -383,7 +434,8 @@ class VirtualTryOnGame:
                 ui_frame = self.handle_virtual_tryon(
                     vertical_frame, pointer_pos, is_selecting)
             else:
-                ui_frame = vertical_frame
+                ui_frame = self.handle_calibration_screen(
+                    vertical_frame, pointer_pos, is_selecting)
 
             # Add FPS counter for debugging (optional)
             cv2.putText(ui_frame, f"FPS: {avg_fps:.1f}", (10, 30),

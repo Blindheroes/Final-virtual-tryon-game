@@ -18,48 +18,53 @@ class UIManager:
         self.font_path = os.path.join(
             self.base_path, 'fonts', 'static', 'Montserrat-SemiBold.ttf')
 
-        # UI Colors - Monochrome theme
-        self.primary_color = (220, 220, 220)     # Light gray
-        self.secondary_color = (150, 150, 150)   # Medium gray
-        self.text_color = (255, 255, 255)        # White
-        self.text_highlight_color = (255, 255, 255)  # White
-        self.highlight_color = (200, 200, 200)   # Highlighted light gray
-        self.background_color = (30, 30, 30)     # Dark gray
-        self.accent_color = (100, 100, 100)      # Accent gray
+        # UI Settings according to requirements
+        self.width = 640
+        self.height = 480
+        self.title_font_scale = 0.7
+        self.text_font_scale = 0.45
+        self.text_color = (255, 255, 255)  # White
+        self.text_color_button = (0, 0, 0)  # Black text on buttons
+        self.opacity = 0.6
+        self.button_color = (255, 255, 255)  # White
+        self.button_selected_color = (0, 255, 0)  # Green
+
+        # Current step for calibration
+        self.current_step = 0
 
         # Define button areas for different screens (x, y, width, height)
         self.buttons = {
             # Calibration screen
-            "calibration_complete": (30, 300, 200, 25),
+            "calibration_complete": (50, 50, 540, 50),
 
             # Main menu
-            "body_scan": (20, 300, 280, 80),
-            "voice_assistant": (20, 400, 280, 80),
-            "exit": (20, 500, 280, 80),
+            "body_scan": (120, 200, 400, 50),
+            "voice_assistant": (120, 300, 400, 50),
+            "exit": (120, 400, 400, 50),
 
             # Gender select
-            "male": (175, 400, 200, 80),
-            "female": (405, 400, 200, 80),
-            "back": (290, 550, 200, 80),
+            "male": (100, 120, 150, 50),
+            "female": (390, 120, 150, 50),
+            "back": (120, 400, 400, 50),
 
             # Body scan screen
-            "continue": (290, 550, 200, 80),
+            "continue": (450, 50, 100, 50),
+            "back_from_scan": (50, 50, 100, 50),
 
             # Voice assistant screen
+            "continue_voice": (120, 400, 400, 50),
+            "back_voice": (120, 460, 400, 50),
 
             # Virtual try-on screen
-            "main_menu": (175, 650, 200, 80),
-            "recalibrate": (405, 650, 200, 80)
+            "main_menu": (20, 20, 295, 50),
+            "recalibrate": (325, 20, 295, 50),
+            "top_select": (20, 380, 150, 40),
+            "bottom_select": (180, 380, 150, 40)
         }
 
-        # Font settings for OpenCV fallback
-        self.font = cv2.FONT_HERSHEY_DUPLEX
-        self.font_scale = 1.0
-        self.font_color = (255, 255, 255)
-        self.font_thickness = 2
-        self.title_font_size = 20
-        self.text_font_size = 12
-        self.text_left_margin_divider = 8
+        # Font settings
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self.font_thickness = 1
 
         # Animation and timing
         self.start_time = time.time()
@@ -67,6 +72,9 @@ class UIManager:
 
         # Try to load custom fonts
         self.custom_font_available = self._check_custom_font_available()
+
+        # For voice assistant screen
+        self.is_listening = False
 
     def _check_custom_font_available(self):
         """Check if custom fonts are available through PIL"""
@@ -91,7 +99,7 @@ class UIManager:
         if not self.custom_font_available:
             # Fall back to OpenCV font
             cv2.putText(img, text, position, self.font,
-                        self.font_scale, color, self.font_thickness, cv2.LINE_AA)
+                        self.title_font_scale, color, self.font_thickness, cv2.LINE_AA)
             return img
 
         try:
@@ -115,7 +123,7 @@ class UIManager:
             print(f"Error using custom font: {e}")
             # Fall back to OpenCV font
             cv2.putText(img, text, position, self.font,
-                        self.font_scale, color, self.font_thickness, cv2.LINE_AA)
+                        self.title_font_scale, color, self.font_thickness, cv2.LINE_AA)
             return img
 
     def is_within_button(self, x, y, button_name):
@@ -133,7 +141,7 @@ class UIManager:
 
         h, w = frame.shape[:2]
         btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
-        color = self.highlight_color if active else self.secondary_color
+        color = self.button_selected_color if active else self.button_color
 
         # Check if button is completely outside the frame
         # Only return if the button is 100% outside the visible area
@@ -208,17 +216,17 @@ class UIManager:
                 # Check if text is in the visible area
                 if x_start <= text_x < x_end and y_start <= text_y < y_end:
                     frame = self._put_text_with_custom_font(
-                        frame, text, (text_x, text_y), text_size, self.text_color)
+                        frame, text, (text_x, text_y), text_size, self.text_color_button)
             else:
                 text_size = cv2.getTextSize(
-                    text, self.font, self.font_scale, self.font_thickness)[0]
+                    text, self.font, self.text_font_scale, self.font_thickness)[0]
                 text_x = btn_x + (btn_w - text_size[0]) // 2
                 text_y = btn_y + (btn_h + text_size[1]) // 2
 
                 # Check if text is in the visible area
                 if x_start <= text_x < x_end and y_start <= text_y < y_end:
                     cv2.putText(frame, text, (text_x, text_y), self.font,
-                                self.font_scale, self.font_color, self.font_thickness, cv2.LINE_AA)
+                                self.text_font_scale, self.text_color_button, self.font_thickness, cv2.LINE_AA)
 
         return frame
 
@@ -235,11 +243,11 @@ class UIManager:
         # Add header bar
         header_height = 80
         cv2.rectangle(background, (0, 0), (w, header_height),
-                      self.secondary_color, cv2.FILLED)
+                      self.button_color, cv2.FILLED)
 
         # Add decorative elements
         cv2.line(background, (0, header_height),
-                 (w, header_height), self.accent_color, 3)
+                 (w, header_height), self.button_selected_color, 3)
 
         # Add a subtle pattern
         pattern_size = 20
@@ -254,55 +262,33 @@ class UIManager:
 
     def draw_calibration_screen(self, frame, pointer_pos=None):
         """Draw the calibration screen"""
+        # Define UI settings according to requirements
         h, w = frame.shape[:2]
 
-        # Create UI background
-        ui_frame = self._create_ui_background(h, w)
-
-        # Add camera feed with transparency
-        alpha = 0.7
-        ui_frame = cv2.addWeighted(ui_frame, 1-alpha, frame, alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "CALIBRATION", (w//4, 30), self.title_font_size)
-        else:
-            cv2.putText(ui_frame, "CALIBRATION", (w//4, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
+        cv2.putText(overlay, "CALIBRATION", (w//2 - 100, 30),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
 
         # Draw calibration instructions
-        instructions = [
-            "1. Stand in front of the camera",
-            "2. Move your hand to verify tracking",
-            "3. Practice gestures:"
+        descriptions = [
+            "Keep your hands visible within the frame for hand gesture detection",
+            "Keep ~2m distance from camera and ensure your full body is visible"
         ]
 
-        y_pos = 150
-        for line in instructions:
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, line, (w//self.text_left_margin_divider, y_pos), self.text_font_size)
-            else:
-                cv2.putText(ui_frame, line, (100, y_pos), self.font,
-                            self.font_scale, self.font_color, self.font_thickness, cv2.LINE_AA)
-            y_pos += 12
-
-        # Add gesture instructions
-        gesture_instructions = [
-            "- Point with index finger",
-            "- Select with index + pinky finger"
-        ]
-
-        y_pos += 20
-        for line in gesture_instructions:
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, line, (w//self.text_left_margin_divider, y_pos), self.text_font_size)
-            else:
-                cv2.putText(ui_frame, line, (150, y_pos), self.font,
-                            self.font_scale-0.2, self.font_color, self.font_thickness-1, cv2.LINE_AA)
-            y_pos += 12
+        y_offset = 240
+        for line in descriptions:
+            # Handle multi-line descriptions by splitting text
+            desc_lines = [line[i:i+40] for i in range(0, len(line), 40)]
+            for desc in desc_lines:
+                desc_size = cv2.getTextSize(
+                    desc, self.font, self.text_font_scale, 1)[0]
+                desc_x = (w - desc_size[0]) // 2
+                cv2.putText(overlay, desc, (desc_x, y_offset),
+                            self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
+                y_offset += 30
 
         # Draw progress steps
         steps = [
@@ -311,23 +297,51 @@ class UIManager:
             "Keep ~2m distance from camera"
         ]
 
-        y_pos = 250
-        for i, step in enumerate(steps):
-            # Draw step indicator
-            cv2.circle(ui_frame, (w//self.text_left_margin_divider-10, y_pos), self.text_font_size - 8,
-                       self.secondary_color, cv2.FILLED)
+        y_step = 350
+        for i, step_text in enumerate(steps):
+            button_x = 40
+            button_width = w - 80
+            button_height = 50
+            button_y = y_step + i * (button_height + 10)
 
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, str(i+1), (w//self.text_left_margin_divider, y_pos+5), self.text_font_size)
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, step, (w//self.text_left_margin_divider, y_pos+5), self.text_font_size)
-            else:
-                cv2.putText(ui_frame, str(i+1), (75, y_pos+8),
-                            self.font, 0.8, self.font_color, 2)
-                cv2.putText(ui_frame, step, (110, y_pos+8),
-                            self.font, 0.7, self.font_color, 1)
-            y_pos += 12
+            # Draw rounded rectangle for step
+            button_radius = 10
+
+            # Button color based on selection
+            button_color = (0, 255, 0) if i == self.current_step else (
+                255, 255, 255)
+
+            # Draw rounded rectangle background
+            # Top left corner
+            cv2.circle(overlay, (button_x + button_radius, button_y + button_radius),
+                       button_radius, button_color, -1)
+            # Top right corner
+            cv2.circle(overlay, (button_x + button_width - button_radius, button_y + button_radius),
+                       button_radius, button_color, -1)
+            # Bottom left corner
+            cv2.circle(overlay, (button_x + button_radius, button_y + button_height - button_radius),
+                       button_radius, button_color, -1)
+            # Bottom right corner
+            cv2.circle(overlay, (button_x + button_width - button_radius, button_y + button_height - button_radius),
+                       button_radius, button_color, -1)
+            # Rectangles to connect the circles
+            cv2.rectangle(overlay, (button_x + button_radius, button_y),
+                          (button_x + button_width - button_radius, button_y + button_height), button_color, -1)
+            cv2.rectangle(overlay, (button_x, button_y + button_radius),
+                          (button_x + button_width, button_y + button_height - button_radius), button_color, -1)
+
+            # Add step text
+            text_x = button_x + 20
+            text_y = button_y + (button_height + 8) // 2
+            cv2.putText(overlay, step_text, (text_x, text_y),
+                        self.font, self.text_font_scale, (0, 0, 0), 1, cv2.LINE_AA)
+
+        # "Continue Setup" button at the top - rounded rectangle
+        button_x = self.buttons["calibration_complete"][0]
+        button_y = self.buttons["calibration_complete"][1]
+        button_width = self.buttons["calibration_complete"][2]
+        button_height = self.buttons["calibration_complete"][3]
+        button_radius = 10
 
         # Check if pointer is over the button
         button_active = False
@@ -335,44 +349,60 @@ class UIManager:
             x, y = pointer_pos
             button_active = self.is_within_button(x, y, "calibration_complete")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 2,
-                       (255, 255, 255), -1)  # White center dot
-            if button_active:
-                # Draw a larger cursor for active button (red)
-                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
-            else:
-                cv2.circle(ui_frame, pointer_pos, 10,
-                           (255, 255, 255), 2)  # White circle
+            # Draw a cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, (255, 255, 255), 2)
+            cv2.circle(overlay, pointer_pos, 2, (255, 255, 255), -1)
 
-        # Draw calibration complete button
-        self._draw_button(ui_frame, "calibration_complete",
-                          "Continue Setup", button_active)
+        # Use white for button color
+        button_color = (255, 255, 255)
 
-        return ui_frame
+        # Draw rounded rectangle for button
+        # Top left corner
+        cv2.circle(overlay, (button_x + button_radius, button_y + button_radius),
+                   button_radius, button_color, -1)
+        # Top right corner
+        cv2.circle(overlay, (button_x + button_width - button_radius, button_y + button_radius),
+                   button_radius, button_color, -1)
+        # Bottom left corner
+        cv2.circle(overlay, (button_x + button_radius, button_y + button_height - button_radius),
+                   button_radius, button_color, -1)
+        # Bottom right corner
+        cv2.circle(overlay, (button_x + button_width - button_radius, button_y + button_height - button_radius),
+                   button_radius, button_color, -1)
+        # Rectangles to connect the circles
+        cv2.rectangle(overlay, (button_x + button_radius, button_y),
+                      (button_x + button_width - button_radius, button_y + button_height), button_color, -1)
+        cv2.rectangle(overlay, (button_x, button_y + button_radius),
+                      (button_x + button_width, button_y + button_height - button_radius), button_color, -1)
+
+        # Add button text
+        button_text = "Continue Setup"
+        text_size = cv2.getTextSize(
+            button_text, self.font, self.text_font_scale, 1)[0]
+        text_x = button_x + (button_width - text_size[0]) // 2
+        text_y = button_y + (button_height + text_size[1]) // 2
+        cv2.putText(overlay, button_text, (text_x, text_y),
+                    self.font, self.text_font_scale, (0, 0, 0), 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1.0, overlay, self.opacity, 0)
+
+        return result
 
     def draw_main_menu(self, frame, pointer_pos=None):
         """Draw the main menu screen"""
         h, w = frame.shape[:2]
 
-        # Create UI background
-        ui_frame = self._create_ui_background(h, w)
-
-        # Add camera feed with transparency
-        alpha = 0.5
-        ui_frame = cv2.addWeighted(ui_frame, 1-alpha, frame, alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "VIRTUAL TRY-ON", (w//2-170, 30), 40)
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "Choose an option", (w//2-150, 130), 30)
-        else:
-            cv2.putText(ui_frame, "VIRTUAL TRY-ON", (w//2-170, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
-            cv2.putText(ui_frame, "Choose an option", (w//2-150, 150), self.font,
-                        1.2, self.font_color, self.font_thickness, cv2.LINE_AA)
+        cv2.putText(overlay, "VIRTUAL TRY-ON", (w//2 - 120, 30),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
+
+        # Add subtitle
+        cv2.putText(overlay, "Choose your option", (w//2 - 120, 100),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
 
         # Check which button is active
         body_scan_active = False
@@ -385,56 +415,65 @@ class UIManager:
             voice_active = self.is_within_button(x, y, "voice_assistant")
             exit_active = self.is_within_button(x, y, "exit")
 
-            # Draw a cursor with white color
-            cv2.circle(ui_frame, pointer_pos, 10, (255, 255, 255), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (255, 255, 255), -1)
+            # Draw cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
+            cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
 
-        # Draw buttons
-        self._draw_button(ui_frame, "body_scan", "Body Scan", body_scan_active)
-        self._draw_button(ui_frame, "voice_assistant",
-                          "Voice Assistant", voice_active)
-        self._draw_button(ui_frame, "exit", "Exit", exit_active)
+        # Draw buttons using rounded rectangle style
+        buttons = [
+            ("body_scan", "Body Scan", body_scan_active),
+            ("voice_assistant", "Voice Assistant", voice_active),
+            ("exit", "Exit", exit_active)
+        ]
 
-        # Add some decorative icons
-        # Body scan icon
-        icon_x = 200
-        icon_y = 330
-        cv2.rectangle(ui_frame, (icon_x, icon_y),
-                      (icon_x+30, icon_y+60), (255, 255, 255), 1)
-        cv2.line(ui_frame, (icon_x, icon_y+30),
-                 (icon_x+30, icon_y+30), (255, 255, 255), 1)
+        for button_name, text, active in buttons:
+            if button_name not in self.buttons:
+                continue
 
-        # Voice assistant icon
-        icon_x = 200
-        icon_y = 430
-        cv2.circle(ui_frame, (icon_x+15, icon_y+15), 15, (255, 255, 255), 1)
-        cv2.rectangle(ui_frame, (icon_x+13, icon_y+15),
-                      (icon_x+17, icon_y+40), (255, 255, 255), cv2.FILLED)
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 25  # Corner radius (half of button height)
 
-        return ui_frame
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1, overlay, self.opacity, 0)
+
+        return result
 
     def draw_gender_select(self, frame, pointer_pos=None):
         """Draw the gender selection screen"""
         h, w = frame.shape[:2]
 
-        # Create UI background
-        ui_frame = self._create_ui_background(h, w)
-
-        # Add camera feed with transparency
-        alpha = 0.5
-        ui_frame = cv2.addWeighted(ui_frame, 1-alpha, frame, alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "SELECT GENDER", (w//2-150, 30), 40)
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "Choose your gender for accurate fit", (w//2-220, 130), 28)
-        else:
-            cv2.putText(ui_frame, "SELECT GENDER", (w//2-150, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
-            cv2.putText(ui_frame, "Choose your gender for accurate fit",
-                        (w//2-220, 150), self.font, 0.9, self.font_color, self.font_thickness, cv2.LINE_AA)
+        cv2.putText(overlay, "SELECT GENDER", (w//2 - 120, 30),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
+
+        # Add subtitle
+        cv2.putText(overlay, "Choose your gender for accurate fit", (w//2 - 180, 80),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
 
         # Check which button is active
         male_active = False
@@ -447,61 +486,113 @@ class UIManager:
             female_active = self.is_within_button(x, y, "female")
             back_active = self.is_within_button(x, y, "back")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 2,
-                       (255, 255, 255), -1)  # White center dot
-            if male_active or female_active or back_active:
-                # Draw a larger cursor for active button (red)
-                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
-            else:
-                cv2.circle(ui_frame, pointer_pos, 10,
-                           (255, 255, 255), 2)  # White circle
+            # Draw cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
+            cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
 
-        # Draw buttons
-        self._draw_button(ui_frame, "male", "Male", male_active)
-        self._draw_button(ui_frame, "female", "Female", female_active)
-        self._draw_button(ui_frame, "back", "Back", back_active)
+        # Draw gender buttons
+        buttons = [
+            ("male", "Male", male_active),
+            ("female", "Female", female_active)
+        ]
 
-        # Add gender icons
-        # Male icon
-        cv2.circle(ui_frame, (275, 330), 30, (255, 255, 255), 2)
-        # Arrow pointing up-right
-        cv2.line(ui_frame, (290, 315), (310, 295), (255, 255, 255), 2)
+        for button_name, text, active in buttons:
+            if button_name not in self.buttons:
+                continue
 
-        # Female icon
-        cv2.circle(ui_frame, (505, 330), 30, (255, 255, 255), 2)
-        # Cross at bottom
-        cv2.line(ui_frame, (505, 360), (505, 380), (255, 255, 255), 2)
-        cv2.line(ui_frame, (490, 370), (520, 370), (255, 255, 255), 2)
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 25  # Corner radius (half of button height)
 
-        return ui_frame
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Draw back button
+        btn_x, btn_y, btn_w, btn_h = self.buttons["back"]
+        button_radius = 25  # Corner radius (half of button height)
+
+        # Button color based on active state
+        button_color = self.button_selected_color if back_active else self.button_color
+
+        # Draw the rounded button
+        # Left semicircle
+        cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                   button_radius, button_color, -1)
+        # Right semicircle
+        cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                   button_radius, button_color, -1)
+        # Center rectangle
+        cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                      (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+        # Add button text
+        text = "Back"
+        text_size = cv2.getTextSize(
+            text, self.font, self.text_font_scale, 1)[0]
+        text_x = btn_x + (btn_w - text_size[0]) // 2
+        text_y = btn_y + (btn_h + text_size[1]) // 2
+        cv2.putText(overlay, text, (text_x, text_y),
+                    self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1, overlay, self.opacity, 0)
+
+        return result
 
     def draw_body_scan(self, frame, pointer_pos=None, body_type=None):
         """Draw the body scan screen"""
         h, w = frame.shape[:2]
 
-        # Create UI background
-        ui_frame = self._create_ui_background(h, w)
-
-        # Add camera feed with higher transparency
-        alpha = 0.8  # More camera visibility for body scan
-        ui_frame = cv2.addWeighted(ui_frame, 1-alpha, frame, alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "BODY SCAN", (w//2-120, 30), 40)
-        else:
-            cv2.putText(ui_frame, "BODY SCAN", (w//2-120, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
+        cv2.putText(overlay, "BODY SCAN", (w//2 - 80, 30),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
 
-        # Add scanning overlay
-        # Draw T-pose silhouette guide (simplified)
-        center_x = w // 2
-        cv2.line(ui_frame, (center_x, 150), (center_x, 400),
-                 (0, 255, 255), 1, cv2.LINE_AA)  # Body line
-        cv2.line(ui_frame, (center_x - 100, 200), (center_x +
-                 100, 200), (0, 255, 255), 1, cv2.LINE_AA)  # Arms
+        # Add instruction text
+        instruction = "Stand ~2m away from camera, Ensure your full body is visible"
+
+        # Handle multi-line text for instructions
+        max_chars = 40
+        lines = []
+        for i in range(0, len(instruction), max_chars):
+            lines.append(instruction[i:i+max_chars])
+
+        y_offset = 420
+        for line in lines:
+            text_size = cv2.getTextSize(
+                line, self.font, self.text_font_scale, 1)[0]
+            text_x = (w - text_size[0]) // 2
+            cv2.putText(overlay, line, (text_x, y_offset),
+                        self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
+            y_offset += 30
+
+        # Drawing the scanning area with a rectangle frame
+        scan_x = 80
+        scan_y = 120
+        scan_w = 480
+        scan_h = 280
+        cv2.rectangle(overlay, (scan_x, scan_y), (scan_x+scan_w, scan_y+scan_h),
+                      (100, 100, 100), 2)
 
         # Calculate animation time
         current_time = time.time()
@@ -509,42 +600,30 @@ class UIManager:
 
         # Show body type if available
         if body_type:
-            # Highlight box
-            cv2.rectangle(ui_frame, (center_x-140, 120),
-                          (center_x+140, 180), (0, 100, 0), cv2.FILLED)
-            cv2.rectangle(ui_frame, (center_x-140, 120),
-                          (center_x+140, 180), (0, 255, 0), 2)
-
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, f"Body Type: {body_type}", (center_x-120, 150), 30)
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, "Stand in T-pose for measurements", (center_x-220, 210), 24)
-            else:
-                cv2.putText(ui_frame, f"Body Type: {body_type}",
-                            (center_x-120, 170), self.font, 0.9, (255, 255, 255), self.font_thickness, cv2.LINE_AA)
-                cv2.putText(ui_frame, "Stand in T-pose for accurate measurements",
-                            (center_x-240, 230), self.font, 0.7, self.font_color, 1, cv2.LINE_AA)
+            # Display body type info
+            text = f"Body Type: {body_type}"
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = (w - text_size[0]) // 2
+            cv2.rectangle(overlay, (text_x - 10, 80), (text_x + text_size[0] + 10, 110),
+                          self.button_selected_color, -1)
+            cv2.putText(overlay, text, (text_x, 100),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
         else:
             # Scanning animation
             scan_time = int(self.scan_animation_timer) % 4
             scan_msg = "Scanning" + "." * (scan_time + 1)
 
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, scan_msg, (center_x-80, 150), 32)
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, "Stand in T-pose for accurate measurements", (center_x-240, 200), 22)
-            else:
-                cv2.putText(ui_frame, scan_msg,
-                            (center_x-80, 150), self.font, 0.9, (0, 255, 255), 2, cv2.LINE_AA)
-                cv2.putText(ui_frame, "Stand in T-pose for accurate measurements",
-                            (center_x-240, 200), self.font, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
+            text_size = cv2.getTextSize(
+                scan_msg, self.font, self.text_font_scale, 1)[0]
+            text_x = (w - text_size[0]) // 2
+            cv2.putText(overlay, scan_msg, (text_x, 100),
+                        self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
 
-            # Draw scanning line animation
-            scan_y = 150 + int((self.scan_animation_timer * 50) % 300)
-            cv2.line(ui_frame, (center_x-150, scan_y),
-                     (center_x+150, scan_y), (0, 255, 255), 2)
+            # Draw scanning line animation (horizontal line moving down)
+            scan_y_pos = 120 + int((self.scan_animation_timer * 30) % 280)
+            cv2.line(overlay, (80, scan_y_pos), (560, scan_y_pos),
+                     (0, 255, 255), 2)
 
         # Check which button is active
         continue_active = False
@@ -553,86 +632,133 @@ class UIManager:
         if pointer_pos:
             x, y = pointer_pos
             continue_active = self.is_within_button(x, y, "continue")
-            back_active = self.is_within_button(x, y, "back")
+            back_active = self.is_within_button(x, y, "back_from_scan")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 2,
-                       (255, 255, 255), -1)  # White center dot
-            if continue_active or back_active:
-                # Draw a larger cursor for active button (red)
-                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
-            else:
-                cv2.circle(ui_frame, pointer_pos, 10,
-                           (255, 255, 255), 2)  # White circle
+            # Draw cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
+            cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
 
         # Draw buttons
-        self._draw_button(ui_frame, "continue", "Continue", continue_active)
-        self._draw_button(ui_frame, "back", "Back", back_active)
+        buttons = [
+            ("continue", "Continue", continue_active),
+            ("back_from_scan", "Back", back_active)
+        ]
 
-        return ui_frame
+        for button_name, text, active in buttons:
+            if button_name not in self.buttons:
+                continue
+
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 25  # Corner radius (half of button height)
+
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1, overlay, self.opacity, 0)
+
+        return result
 
     def draw_voice_assistant(self, frame, pointer_pos=None):
         """Draw the voice assistant screen"""
         h, w = frame.shape[:2]
 
-        # Create UI background
-        ui_frame = self._create_ui_background(h, w)
-
-        # Add camera feed with transparency
-        alpha = 0.6
-        ui_frame = cv2.addWeighted(ui_frame, 1-alpha, frame, alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "VOICE ASSISTANT", (w//2-170, 30), 38)
-        else:
-            cv2.putText(ui_frame, "VOICE ASSISTANT", (w//2-170, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
+        cv2.putText(overlay, "VOICE ASSISTANT", (w//2 - 120, 30),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
 
-        # Add voice visualization
-        center_x = w // 2
-        # Voice animation based on time
-        current_time = time.time()
-        animation_factor = (np.sin(current_time * 6) + 1) / \
-            2  # 0 to 1 animation factor
-        radius = 40 + int(15 * animation_factor)  # Pulsating circle
+        # Add listening status
+        text = "Listening..." if self.is_listening else "Click to Talk"
+        text_size = cv2.getTextSize(
+            text, self.font, self.text_font_scale, 1)[0]
+        text_x = (w - text_size[0]) // 2
+        cv2.putText(overlay, text, (text_x, 100),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
 
-        # Draw voice button with animation
-        cv2.circle(ui_frame, (center_x, 200), radius,
-                   self.secondary_color, cv2.FILLED)
-        cv2.circle(ui_frame, (center_x, 200), radius, (255, 255, 255), 2)
+        # Draw talk button
+        button_x = 120
+        button_y = 130
+        button_w = 400
+        button_h = 50
+        button_radius = 25  # Corner radius (half of button height)
 
-        # Add mic icon
-        cv2.rectangle(ui_frame, (center_x-10, 180),
-                      (center_x+10, 220), (255, 255, 255), cv2.FILLED)
-        cv2.circle(ui_frame, (center_x, 180), 15, (255, 255, 255), cv2.FILLED)
+        # Button color based on listening state
+        button_color = self.button_selected_color if self.is_listening else self.button_color
 
-        # Add voice assistant prompts
-        prompts = [
-            "What type of clothing are you looking for?",
-            "What is your preferred style?",
-            "Any specific color preferences?"
+        # Draw the rounded button
+        # Left semicircle
+        cv2.circle(overlay, (button_x + button_radius, button_y + button_h//2),
+                   button_radius, button_color, -1)
+        # Right semicircle
+        cv2.circle(overlay, (button_x + button_w - button_radius, button_y + button_h//2),
+                   button_radius, button_color, -1)
+        # Center rectangle
+        cv2.rectangle(overlay, (button_x + button_radius, button_y),
+                      (button_x + button_w - button_radius, button_y + button_h), button_color, -1)
+
+        # Add button text
+        text = "Click to Talk"
+        text_size = cv2.getTextSize(
+            text, self.font, self.text_font_scale, 1)[0]
+        text_x = button_x + (button_w - text_size[0]) // 2
+        text_y = button_y + (button_h + text_size[1]) // 2
+        cv2.putText(overlay, text, (text_x, text_y),
+                    self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Add example commands title
+        cv2.putText(overlay, "Example Commands:", (20, 200),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
+
+        # Add example commands as white rectangles with black text
+        example_commands = [
+            "\"Find clothes for asian male\"",
+            "\"Show me casual outfits\"",
+            "\"What's trending for summer 2025?\""
         ]
 
-        y_pos = 300
-        for prompt in prompts:
-            if self.custom_font_available:
-                ui_frame = self._put_text_with_custom_font(
-                    ui_frame, prompt, (100, y_pos), 26)
-            else:
-                cv2.putText(ui_frame, prompt, (100, y_pos), self.font,
-                            0.8, self.font_color, self.font_thickness, cv2.LINE_AA)
-            y_pos += 50
+        y_pos = 220
+        for cmd in example_commands:
+            # Draw white rectangle background
+            rect_x = 20
+            rect_y = y_pos
+            rect_w = 600
+            rect_h = 40
 
-        # Voice assistant functionality would typically go here
-        # For now, just add a placeholder message
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "Voice assistant feature in development", (100, 480), 24, (0, 255, 255))
-        else:
-            cv2.putText(ui_frame, "Voice assistant feature in development",
-                        (100, 480), self.font, 0.8, (0, 255, 255), self.font_thickness, cv2.LINE_AA)
+            # Draw rounded rectangle for commands
+            cv2.rectangle(overlay, (rect_x, rect_y), (rect_x + rect_w, rect_y + rect_h),
+                          self.button_color, -1)
+
+            # Add command text
+            text_size = cv2.getTextSize(
+                cmd, self.font, self.text_font_scale, 1)[0]
+            text_x = rect_x + 10
+            text_y = rect_y + (rect_h + text_size[1]) // 2
+            cv2.putText(overlay, cmd, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+            y_pos += 50
 
         # Check which button is active
         continue_active = False
@@ -640,59 +766,82 @@ class UIManager:
 
         if pointer_pos:
             x, y = pointer_pos
-            continue_active = self.is_within_button(x, y, "continue")
-            back_active = self.is_within_button(x, y, "back")
+            continue_active = self.is_within_button(x, y, "continue_voice")
+            back_active = self.is_within_button(x, y, "back_voice")
 
-            # Draw a cursor with white color
-            cv2.circle(ui_frame, pointer_pos, 2,
-                       (255, 255, 255), -1)  # White center dot
-            if continue_active or back_active:
-                # Draw a larger cursor for active button (red)
-                cv2.circle(ui_frame, pointer_pos, 10, (0, 0, 255), 2)
-            else:
-                cv2.circle(ui_frame, pointer_pos, 10,
-                           (255, 255, 255), 2)  # White circle
+            # Toggle listening state if clicking on talk button
+            if (button_x <= x <= button_x + button_w) and (button_y <= y <= button_y + button_h):
+                # This would be handled in the main app - here just for UI visualization
+                pass
 
-        # Draw buttons
-        self._draw_button(ui_frame, "continue", "Continue", continue_active)
-        self._draw_button(ui_frame, "back", "Back", back_active)
+            # Draw cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
+            cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
 
-        return ui_frame
+        # Draw navigation buttons
+        buttons = [
+            ("continue_voice", "Continue", continue_active),
+            ("back_voice", "Back", back_active)
+        ]
 
-    def draw_virtual_tryon(self, frame, pointer_pos=None):
+        for button_name, text, active in buttons:
+            if button_name not in self.buttons:
+                continue
+
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 25  # Corner radius (half of button height)
+
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1, overlay, self.opacity, 0)
+
+        return result
+
+    def draw_virtual_tryon(self, frame, pointer_pos=None, active_clothing_type='top'):
         """Draw the virtual try-on screen"""
         h, w = frame.shape[:2]
 
-        # Create UI background with minimal elements
-        ui_frame = frame.copy()
-
-        # Add semi-transparent header
-        header_height = 80
-        header = np.zeros((header_height, w, 3), dtype=np.uint8)
-        header[:] = (30, 30, 30)
-
-        # Apply the header with transparency
-        for y in range(header_height):
-            alpha = 0.7
-            ui_frame[y, :] = cv2.addWeighted(
-                ui_frame[y, :], 1-alpha, header[y, :], alpha, 0)
+        # Create transparent overlay
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
 
         # Add title
-        if self.custom_font_available:
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "VIRTUAL TRY-ON", (w//2-150, 30), 38)
-            ui_frame = self._put_text_with_custom_font(
-                ui_frame, "Use selection gesture to switch outfits", (w//2-220, 80), 22)
-        else:
-            cv2.putText(ui_frame, "VIRTUAL TRY-ON", (w//2-150, 50), self.font,
-                        1.5, self.font_color, self.font_thickness, cv2.LINE_AA)
-            cv2.putText(ui_frame, "Use selection gesture to switch outfits",
-                        (w//2-220, 100), self.font, 0.8, self.font_color, 1, cv2.LINE_AA)
+        cv2.putText(overlay, "VIRTUAL TRY-ON", (w//2 - 120, 300),
+                    self.font, self.title_font_scale, self.text_color, 2, cv2.LINE_AA)
+
+        # Add a recommendation bar at the bottom
+        cv2.rectangle(overlay, (0, 430), (w, 480), self.button_color, -1)
+        cv2.putText(overlay, "Use hand gestures to cycle clothing", (20, 460),
+                    self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
 
         # Check which button is active
         main_menu_active = False
         recalibrate_active = False
         exit_active = False
+
+        # Set active clothing type buttons
+        top_select_active = active_clothing_type == 'top'
+        bottom_select_active = active_clothing_type == 'bottom'
 
         if pointer_pos:
             x, y = pointer_pos
@@ -700,13 +849,96 @@ class UIManager:
             recalibrate_active = self.is_within_button(x, y, "recalibrate")
             exit_active = self.is_within_button(x, y, "exit")
 
-            # Draw a cursor
-            cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
-            cv2.circle(ui_frame, pointer_pos, 2, (0, 255, 0), -1)
+            # Override active status when hovering
+            if self.is_within_button(x, y, "top_select"):
+                top_select_active = True
+            if self.is_within_button(x, y, "bottom_select"):
+                bottom_select_active = True
 
-        # Draw buttons
-        self._draw_button(ui_frame, "main_menu", "Main Menu", main_menu_active)
-        self._draw_button(ui_frame, "recalibrate",
-                          "Recalibrate", recalibrate_active)
+            # Draw cursor at pointer position
+            cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
+            cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
 
-        return ui_frame
+        # Draw navigation buttons
+        buttons = [
+            ("main_menu", "Main Menu", main_menu_active),
+            ("recalibrate", "Rescan", recalibrate_active),
+            ("exit", "Exit", exit_active)
+        ]
+
+        for button_name, text, active in buttons:
+            if button_name not in self.buttons:
+                continue
+
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 25  # Corner radius (half of button height)
+
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Draw clothing selection buttons
+        clothing_buttons = [
+            ("top_select", "Top", top_select_active),
+            ("bottom_select", "Bottom", bottom_select_active)
+        ]
+
+        # Add label above clothing buttons
+        cv2.putText(overlay, "Select clothing type:", (20, 360),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
+
+        for button_name, text, active in clothing_buttons:
+            if button_name not in self.buttons:
+                continue
+
+            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
+            button_radius = 20  # Corner radius for smaller buttons
+
+            # Button color based on active state
+            button_color = self.button_selected_color if active else self.button_color
+
+            # Draw the rounded button
+            # Left semicircle
+            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Right semicircle
+            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
+                       button_radius, button_color, -1)
+            # Center rectangle
+            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
+                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
+
+            # Add button text
+            text_size = cv2.getTextSize(
+                text, self.font, self.text_font_scale, 1)[0]
+            text_x = btn_x + (btn_w - text_size[0]) // 2
+            text_y = btn_y + (btn_h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y),
+                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
+
+        # Add instruction for hand gestures
+        cv2.putText(overlay, f"Currently selecting: {active_clothing_type.upper()}", (20, 340),
+                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
+
+        # Blend overlay with webcam frame
+        result = cv2.addWeighted(frame, 1, overlay, self.opacity, 0)
+
+        return result

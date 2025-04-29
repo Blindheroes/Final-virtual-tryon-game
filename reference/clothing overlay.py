@@ -4,10 +4,11 @@ import numpy as np
 
 # ----- Load Garment Images -----
 # Make sure your images have an alpha channel for transparency if needed.
-shirt = cv2.imread("Baju 2D/polo.png", cv2.IMREAD_UNCHANGED)
+shirt = cv2.imread("./clothing/ideal/male/top/polo.png", cv2.IMREAD_UNCHANGED)
 if shirt is None:
     raise FileNotFoundError("Shirt image not found. Check the path.")
-pants = cv2.imread("Baju 2D/anklePants.png", cv2.IMREAD_UNCHANGED)
+pants = cv2.imread(
+    "./clothing/ideal/male/bottom/anklePants.png", cv2.IMREAD_UNCHANGED)
 if pants is None:
     raise FileNotFoundError("Pants image not found. Check the path.")
 
@@ -21,9 +22,11 @@ mp_drawing = mp.solutions.drawing_utils
 # Optional scaling factors to adjust garment size relative to detected landmarks.
 shirt_scale = 0.55
 pants_scale = 2.0
-offset_y = -50  
+offset_y = -50
 
 # ----- Define a helper function for overlaying images using alpha channels -----
+
+
 def overlay_image(background, foreground):
     """Overlay foreground image on background using the alpha channel.
        Both images should be of the same size or region of interest (ROI) can be used."""
@@ -33,10 +36,12 @@ def overlay_image(background, foreground):
         alpha_mask = foreground[:, :, 3] / 255.0
         # Blend the foreground and background.
         for c in range(3):
-            background[:, :, c] = alpha_mask * fg_rgb[:, :, c] + (1 - alpha_mask) * background[:, :, c]
+            background[:, :, c] = alpha_mask * fg_rgb[:, :, c] + \
+                (1 - alpha_mask) * background[:, :, c]
     else:
         background = cv2.addWeighted(background, 1, foreground, 0.5, 0)
     return background
+
 
 # ----- Open the Video Capture -----
 cap = cv2.VideoCapture(0)  # Adjust camera index if necessary
@@ -56,7 +61,8 @@ while True:
 
     if results.pose_landmarks:
         # Optionally, draw the pose landmarks on the frame.
-        mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+        mp_drawing.draw_landmarks(
+            frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         lm = results.pose_landmarks.landmark
 
@@ -82,8 +88,6 @@ while True:
         ], dtype=np.float32)
         mid_hip = (left_hip + right_hip) / 2.0
 
-
-
         left_ankle = np.array([
             lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
             lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h
@@ -97,20 +101,23 @@ while True:
         # Define the destination triangle for the shirt.
         pts_dst_shirt = np.float32([
             left_shoulder + np.array([0, offset_y]),
-            right_shoulder + np.array([0, offset_y]), 
+            right_shoulder + np.array([0, offset_y]),
             mid_ankle
-            ])
+        ])
         # Optional: apply scaling around the shoulder center.
         center_shirt = (left_shoulder + right_shoulder) / 2.0
-        pts_dst_shirt_scaled = center_shirt + shirt_scale * (pts_dst_shirt - center_shirt)
+        pts_dst_shirt_scaled = center_shirt + \
+            shirt_scale * (pts_dst_shirt - center_shirt)
 
         # Define source triangle points from the shirt image.
         # These values depend on how the garment asset is designed.
         shirt_h, shirt_w = shirt.shape[:2]
         pts_src_shirt = np.float32([
-            [shirt_w * 0.3, 0],        # Corresponds to the left shoulder region in the image
+            # Corresponds to the left shoulder region in the image
+            [shirt_w * 0.3, 0],
             [shirt_w * 0.7, 0],        # Corresponds to the right shoulder region
-            [shirt_w * 0.5, shirt_h]   # The bottom part of the shirt (to map to the hips)
+            # The bottom part of the shirt (to map to the hips)
+            [shirt_w * 0.5, shirt_h]
         ])
 
         # Compute the affine transformation and warp the shirt image.
@@ -126,14 +133,16 @@ while True:
         # Define the destination triangle for the pants.
         pts_dst_pants = np.float32([left_hip, right_hip, mid_ankle])
         center_pants = (left_hip + right_hip) / 2.0
-        pts_dst_pants_scaled = center_pants + pants_scale * (pts_dst_pants - center_pants)
+        pts_dst_pants_scaled = center_pants + \
+            pants_scale * (pts_dst_pants - center_pants)
 
         # Define source triangle points from the pants image.
         pants_h, pants_w = pants.shape[:2]
         pts_src_pants = np.float32([
             [pants_w * 0.3, 0],        # Left hip point in the pants image
             [pants_w * 0.7, 0],        # Right hip point
-            [pants_w * 0.5, pants_h]   # Bottom of the pants (to map to the ankle)
+            # Bottom of the pants (to map to the ankle)
+            [pants_w * 0.5, pants_h]
         ])
 
         # Compute the affine transform and warp the pants image.

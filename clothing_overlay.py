@@ -238,11 +238,22 @@ class ClothingOverlay:
                 ], dtype=np.float32)
                 mid_hip = (left_hip + right_hip) / 2.0
 
+                left_ankle = np.array([
+                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
+                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h
+                ], dtype=np.float32)
+                right_ankle = np.array([
+                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x * w,
+                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y * h
+                ], dtype=np.float32)
+                mid_ankle = (left_ankle + right_ankle) / 2.0
+
                 # Define destination points for the shirt
                 pts_dst = np.float32([
                     left_shoulder + np.array([0, offset_y]),
                     right_shoulder + np.array([0, offset_y]),
-                    mid_hip
+                    # mid_hip
+                    mid_ankle
                 ])
 
                 # Apply scaling relative to the center
@@ -419,3 +430,18 @@ class ClothingOverlay:
             result = cv2.addWeighted(background, 0.5, foreground, 0.5, 0)
 
         return result.astype(np.uint8)
+
+        # # DARI BERYL
+        # result = background.copy()
+
+        # if foreground.shape[2] == 4:
+        #     # Separate the color and alpha channels.
+        #     fg_rgb = foreground[:, :, :3]
+        #     alpha_mask = foreground[:, :, 3] / 255.0
+        #     # Blend the foreground and background.
+        #     for c in range(3):
+        #         result[:, :, c] = alpha_mask * fg_rgb[:, :, c] + \
+        #             (1 - alpha_mask) * background[:, :, c]
+        # else:
+        #     result = cv2.addWeighted(background, 1, foreground, 0.5, 0)
+        # return result

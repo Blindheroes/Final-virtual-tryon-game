@@ -7,28 +7,47 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import math
+import time
+from collections import deque
 
 
 class HandTracker:
     def __init__(self):
-        # Initialize MediaPipe hands
+        # Initialize MediaPipe hands with optimized parameters
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
-            max_num_hands=1,          # Track only one hand for simplicity
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            static_image_mode=False,   # Set to False for video processing
+            max_num_hands=1,           # Track only one hand for simplicity
+            min_detection_confidence=0.6,  # Increased from 0.5 for higher confidence
+            min_tracking_confidence=0.6,   # Increased from 0.5 for more stable tracking
+            model_complexity=1         # 1 provides a good balance between speed and accuracy
         )
         self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_drawing_styles = mp.solutions.drawing_styles
 
         # Finger landmarks
         self.landmarks = None
         self.frame_height = 0
         self.frame_width = 0
 
+        # Hand distance estimation
+        self.hand_z = 0  # Relative z-coordinate of the hand (depth)
+
         # Finger angle thresholds (in degrees)
         self.extension_threshold = 160  # Angle above which a finger is considered extended
         # Angle below which a finger is considered flexed/closed
         self.flexion_threshold = 120
+
+        # Gesture history for temporal filtering
+        self.gesture_history = {
+            'pointing': deque(maxlen=5),
+            'selecting': deque(maxlen=5),
+            'grabbing': deque(maxlen=5),
+            'open_palm': deque(maxlen=5)
+        }
+
+        # Last detection time for tracking stability
+        self.last_detection_time = time.time()
 
     def process_frame(self, frame):
         """
@@ -42,9 +61,36 @@ class HandTracker:
         """
         self.frame_height, self.frame_width = frame.shape[:2]
 
+        # Convert to RGB (MediaPipe requires RGB input)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         # Process the frame to find hands
-        results = self.hands.process(frame)
-        self.landmarks = results.multi_hand_landmarks
+        results = self.hands.process(rgb_frame)
+
+        current_time = time.time()
+
+        # Update landmarks if hands are detected
+        if results.multi_hand_landmarks:
+            self.landmarks = results.multi_hand_landmarks
+            self.last_detection_time = current_time
+
+            # Estimate hand depth by using the distance between wrist and middle finger MCP
+            # This provides a relative measure of how far the hand is from the camera
+            wrist = self.landmarks[0].landmark[0]
+            middle_mcp = self.landmarks[0].landmark[9]
+
+            # Calculate 3D distance between these points
+            dist = np.sqrt(
+                (wrist.x - middle_mcp.x)**2 +
+                (wrist.y - middle_mcp.y)**2 +
+                (wrist.z - middle_mcp.z)**2
+            )
+
+            # Update hand z-coordinate (depth)
+            self.hand_z = dist
+        elif current_time - self.last_detection_time > 0.5:
+            # Clear landmarks if no detection for 0.5 seconds
+            self.landmarks = None
 
         return frame
 
@@ -63,7 +109,7 @@ class HandTracker:
         index_tip = hand_landmarks.landmark[8]
 
         # Convert normalized coordinates to pixel coordinates
-        
+
         x = int(index_tip.x * self.frame_width)
         y = int(index_tip.y * self.frame_height)
 
@@ -164,12 +210,13 @@ class HandTracker:
 
         return angles
 
-    def is_finger_extended(self, finger_name):
+    def is_finger_extended(self, finger_name, threshold_modifier=1.0):
         """
         Determine if a specific finger is extended based on joint angles
 
         Args:
             finger_name: String name of the finger ('thumb', 'index', 'middle', 'ring', 'pinky')
+            threshold_modifier: Modifier to adjust the extension threshold dynamically
 
         Returns:
             Boolean indicating if the finger is extended
@@ -178,35 +225,50 @@ class HandTracker:
         if not angles:
             return False
 
+        adjusted_threshold = self.extension_threshold * threshold_modifier
+
         if finger_name == 'thumb':
             # Thumb is extended if both CMC and MCP joints are relatively straight
-            return angles[finger_name]['cmc'] > self.extension_threshold * 0.7 and \
-                angles[finger_name]['mcp'] > self.extension_threshold * 0.8
+            return angles[finger_name]['cmc'] > adjusted_threshold * 0.7 and \
+                angles[finger_name]['mcp'] > adjusted_threshold * 0.8
         else:
             # For other fingers, check MCP and PIP joints
             # A finger is extended if MCP and PIP joints are relatively straight
-            return angles[finger_name]['mcp'] > self.extension_threshold and \
-                angles[finger_name]['pip'] > self.extension_threshold * 0.8
+            return angles[finger_name]['mcp'] > adjusted_threshold and \
+                angles[finger_name]['pip'] > adjusted_threshold * 0.8
 
-    def is_selecting(self):
+    def _update_gesture_history(self, gesture_name, detected):
         """
-        Determine if the selection gesture is being made
-        (index finger and little finger extended, others closed)
+        Update gesture history for temporal filtering
+
+        Args:
+            gesture_name: Name of the gesture ('pointing', 'selecting', etc.)
+            detected: Boolean indicating if the gesture was detected in current frame
+        """
+        self.gesture_history[gesture_name].append(1 if detected else 0)
+
+    def _get_gesture_confidence(self, gesture_name):
+        """
+        Calculate confidence score for a gesture based on recent history
+
+        Args:
+            gesture_name: Name of the gesture to check
 
         Returns:
-            Boolean indicating whether selection gesture is detected
+            Confidence score between 0.0 and 1.0
         """
-        if not self.landmarks:
-            return False
+        if not self.gesture_history[gesture_name]:
+            return 0.0
 
-        # Check finger states using angle-based detection
-        index_extended = self.is_finger_extended('index')
-        middle_extended = self.is_finger_extended('middle')
-        ring_extended = self.is_finger_extended('ring')
-        pinky_extended = self.is_finger_extended('pinky')
+        # Calculate weighted average (more recent detections have higher weight)
+        weights = np.linspace(0.5, 1.0, len(
+            self.gesture_history[gesture_name]))
+        confidence = np.average(
+            self.gesture_history[gesture_name],
+            weights=weights
+        )
 
-        # Return true if index and pinky are extended, others closed
-        return index_extended and pinky_extended and not middle_extended and not ring_extended
+        return confidence
 
     def is_pointing(self):
         """
@@ -217,17 +279,68 @@ class HandTracker:
             Boolean indicating whether pointing gesture is detected
         """
         if not self.landmarks:
+            self._update_gesture_history('pointing', False)
             return False
 
-        # Check finger states using angle-based detection
-        thumb_extended = self.is_finger_extended('thumb')
-        index_extended = self.is_finger_extended('index')
-        middle_extended = self.is_finger_extended('middle')
-        ring_extended = self.is_finger_extended('ring')
-        pinky_extended = self.is_finger_extended('pinky')
+        # Adapt threshold based on hand distance (z-coordinate)
+        # When hand is further away, be more lenient with angle requirements
+        distance_factor = min(1.0, max(0.7, 1.0 - self.hand_z * 2))
+        adjusted_threshold = self.extension_threshold * distance_factor
 
-        # Return true if only index finger is extended
-        return index_extended and not thumb_extended and not middle_extended and not ring_extended and not pinky_extended
+        # Check finger states using angle-based detection
+        thumb_extended = self.is_finger_extended(
+            'thumb', threshold_modifier=distance_factor)
+        index_extended = self.is_finger_extended(
+            'index', threshold_modifier=distance_factor)
+        middle_extended = self.is_finger_extended(
+            'middle', threshold_modifier=distance_factor)
+        ring_extended = self.is_finger_extended(
+            'ring', threshold_modifier=distance_factor)
+        pinky_extended = self.is_finger_extended(
+            'pinky', threshold_modifier=distance_factor)
+
+        # Raw detection result
+        detected = index_extended and not thumb_extended and not middle_extended and not ring_extended and not pinky_extended
+
+        # Update history
+        self._update_gesture_history('pointing', detected)
+
+        # Return true if confidence exceeds threshold
+        return self._get_gesture_confidence('pointing') > 0.6
+
+    def is_selecting(self):
+        """
+        Determine if the selection gesture is being made
+        (index finger and little finger extended, others closed)
+
+        Returns:
+            Boolean indicating whether selection gesture is detected
+        """
+        if not self.landmarks:
+            self._update_gesture_history('selecting', False)
+            return False
+
+        # Adapt threshold based on hand distance (z-coordinate)
+        distance_factor = min(1.0, max(0.7, 1.0 - self.hand_z * 2))
+
+        # Check finger states using angle-based detection with distance adaptation
+        index_extended = self.is_finger_extended(
+            'index', threshold_modifier=distance_factor)
+        middle_extended = self.is_finger_extended(
+            'middle', threshold_modifier=distance_factor)
+        ring_extended = self.is_finger_extended(
+            'ring', threshold_modifier=distance_factor)
+        pinky_extended = self.is_finger_extended(
+            'pinky', threshold_modifier=distance_factor)
+
+        # Raw detection result
+        detected = index_extended and pinky_extended and not middle_extended and not ring_extended
+
+        # Update history
+        self._update_gesture_history('selecting', detected)
+
+        # Return true if confidence exceeds threshold (slightly higher for selection)
+        return self._get_gesture_confidence('selecting') > 0.65
 
     def is_grabbing(self):
         """
@@ -238,16 +351,34 @@ class HandTracker:
             Boolean indicating whether grabbing gesture is detected
         """
         if not self.landmarks:
+            self._update_gesture_history('grabbing', False)
             return False
 
-        # Check if all fingers are flexed
-        return not any([
-            self.is_finger_extended('thumb'),
-            self.is_finger_extended('index'),
-            self.is_finger_extended('middle'),
-            self.is_finger_extended('ring'),
-            self.is_finger_extended('pinky')
-        ])
+        # Adapt threshold based on hand distance (z-coordinate)
+        distance_factor = min(1.0, max(0.7, 1.0 - self.hand_z * 2))
+
+        # Check if all fingers are flexed using distance-adapted thresholds
+        thumb_extended = self.is_finger_extended(
+            'thumb', threshold_modifier=distance_factor)
+        index_extended = self.is_finger_extended(
+            'index', threshold_modifier=distance_factor)
+        middle_extended = self.is_finger_extended(
+            'middle', threshold_modifier=distance_factor)
+        ring_extended = self.is_finger_extended(
+            'ring', threshold_modifier=distance_factor)
+        pinky_extended = self.is_finger_extended(
+            'pinky', threshold_modifier=distance_factor)
+
+        # Raw detection result - no fingers should be extended
+        detected = not any([thumb_extended, index_extended,
+                           middle_extended, ring_extended, pinky_extended])
+
+        # Update history
+        self._update_gesture_history('grabbing', detected)
+
+        # Return true if confidence exceeds threshold
+        # Higher threshold for grabbing
+        return self._get_gesture_confidence('grabbing') > 0.7
 
     def is_open_palm(self):
         """
@@ -258,16 +389,33 @@ class HandTracker:
             Boolean indicating whether open palm gesture is detected
         """
         if not self.landmarks:
+            self._update_gesture_history('open_palm', False)
             return False
 
-        # Check if all fingers are extended
-        return all([
-            self.is_finger_extended('thumb'),
-            self.is_finger_extended('index'),
-            self.is_finger_extended('middle'),
-            self.is_finger_extended('ring'),
-            self.is_finger_extended('pinky')
-        ])
+        # Adapt threshold based on hand distance (z-coordinate)
+        distance_factor = min(1.0, max(0.7, 1.0 - self.hand_z * 2))
+
+        # Check if all fingers are extended using distance-adapted thresholds
+        thumb_extended = self.is_finger_extended(
+            'thumb', threshold_modifier=distance_factor)
+        index_extended = self.is_finger_extended(
+            'index', threshold_modifier=distance_factor)
+        middle_extended = self.is_finger_extended(
+            'middle', threshold_modifier=distance_factor)
+        ring_extended = self.is_finger_extended(
+            'ring', threshold_modifier=distance_factor)
+        pinky_extended = self.is_finger_extended(
+            'pinky', threshold_modifier=distance_factor)
+
+        # Raw detection result - all fingers should be extended
+        detected = all([thumb_extended, index_extended,
+                       middle_extended, ring_extended, pinky_extended])
+
+        # Update history
+        self._update_gesture_history('open_palm', detected)
+
+        # Return true if confidence exceeds threshold
+        return self._get_gesture_confidence('open_palm') > 0.65
 
     def adjust_thresholds(self, extension_threshold=None, flexion_threshold=None):
         """

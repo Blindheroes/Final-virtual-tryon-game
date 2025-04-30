@@ -839,9 +839,7 @@ class UIManager:
         recalibrate_active = False
         exit_active = False
 
-        # Set active clothing type buttons
-        top_select_active = active_clothing_type == 'top'
-        bottom_select_active = active_clothing_type == 'bottom'
+
 
         if pointer_pos:
             x, y = pointer_pos
@@ -849,12 +847,7 @@ class UIManager:
             recalibrate_active = self.is_within_button(x, y, "recalibrate")
             exit_active = self.is_within_button(x, y, "exit")
 
-            # Override active status when hovering
-            if self.is_within_button(x, y, "top_select"):
-                top_select_active = True
-            if self.is_within_button(x, y, "bottom_select"):
-                bottom_select_active = True
-
+       
             # Draw cursor at pointer position
             cv2.circle(overlay, pointer_pos, 10, self.text_color, 2)
             cv2.circle(overlay, pointer_pos, 2, self.text_color, -1)
@@ -895,47 +888,9 @@ class UIManager:
             cv2.putText(overlay, text, (text_x, text_y),
                         self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
 
-        # Draw clothing selection buttons
-        clothing_buttons = [
-            ("top_select", "Top", top_select_active),
-            ("bottom_select", "Bottom", bottom_select_active)
-        ]
 
         # Add label above clothing buttons
         cv2.putText(overlay, "Select clothing type:", (20, 360),
-                    self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
-
-        for button_name, text, active in clothing_buttons:
-            if button_name not in self.buttons:
-                continue
-
-            btn_x, btn_y, btn_w, btn_h = self.buttons[button_name]
-            button_radius = 20  # Corner radius for smaller buttons
-
-            # Button color based on active state
-            button_color = self.button_selected_color if active else self.button_color
-
-            # Draw the rounded button
-            # Left semicircle
-            cv2.circle(overlay, (btn_x + button_radius, btn_y + btn_h//2),
-                       button_radius, button_color, -1)
-            # Right semicircle
-            cv2.circle(overlay, (btn_x + btn_w - button_radius, btn_y + btn_h//2),
-                       button_radius, button_color, -1)
-            # Center rectangle
-            cv2.rectangle(overlay, (btn_x + button_radius, btn_y),
-                          (btn_x + btn_w - button_radius, btn_y + btn_h), button_color, -1)
-
-            # Add button text
-            text_size = cv2.getTextSize(
-                text, self.font, self.text_font_scale, 1)[0]
-            text_x = btn_x + (btn_w - text_size[0]) // 2
-            text_y = btn_y + (btn_h + text_size[1]) // 2
-            cv2.putText(overlay, text, (text_x, text_y),
-                        self.font, self.text_font_scale, self.text_color_button, 1, cv2.LINE_AA)
-
-        # Add instruction for hand gestures
-        cv2.putText(overlay, f"Currently selecting: {active_clothing_type.upper()}", (20, 340),
                     self.font, self.text_font_scale, self.text_color, 1, cv2.LINE_AA)
 
         # Blend overlay with webcam frame

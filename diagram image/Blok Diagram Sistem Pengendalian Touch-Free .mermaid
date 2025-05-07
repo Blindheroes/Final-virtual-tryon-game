@@ -1,0 +1,38 @@
+graph TD
+    A[Kamera] --> B[MediaPipe Hands]
+    B --> C[Modul Hand Tracking]
+    C --> D[Modul Pengenalan Gestur]
+    D --> E[Modul Antarmuka Pengguna]
+    E --> F[Display Output]
+    
+    G[Modul Body Classifier] --> E
+    H[Modul Clothing Overlay] --> E
+    
+    subgraph "Input"
+        A
+    end
+    
+    subgraph "Pemrosesan Gestur"
+        B
+        C
+        D
+    end
+    
+    subgraph "Aplikasi Virtual Try-On"
+        G
+        H
+    end
+    
+    subgraph "Antarmuka & Output"
+        E
+        F
+    end
+    
+    %% Aliran Data
+    A -.->|Frame Video| B
+    B -.->|Landmark Tangan| C
+    C -.->|Status Jari| D
+    D -.->|Pointer & Gestur| E
+    G -.->|Klasifikasi Tubuh| E
+    H -.->|Overlay Pakaian| E
+    E -.->|UI Rendering| F

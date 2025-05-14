@@ -1,0 +1,9 @@
+Lighting Test Results: Low
+Duration: 30 seconds
+Average brightness: 126.58
+Total frames: 345
+Hand detection rate: 75.94%
+Pointing gesture rate: 0.00%
+Selection gesture rate: 38.17%
+Open palm gesture rate: 18.70%
+Grabbing gesture rate: 0.00%

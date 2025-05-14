@@ -1,0 +1,23 @@
+VIRTUAL TRY-ON GAME TESTING SUMMARY
+===================================
+
+Test run started: 2025-05-14 14:54:43
+
+System Information:
+Python version: 3.11.3
+OS: Windows-10-10.0.19045-SP0
+OpenCV version: 4.8.0
+MediaPipe version: 0.10.18
+NumPy version: 1.24.3
+
+Test Results:
+[FAIL] - Distance Accuracy Test (test_distance_accuracy)
+  Error: Module not found: test_distance_accuracy
+[PASS] - Lighting Accuracy Test (test_lighting_accuracy)
+  Duration: 251.2 seconds
+[FAIL] - Threshold Adaptation Test (test_threshold_adaptation)
+  Error: Module not found: test_threshold_adaptation
+[FAIL] - Temporal Filtering Test (test_temporal_filtering)
+  Error: Module not found: test_temporal_filtering
+
+Test run completed: 2025-05-14 15:00:01

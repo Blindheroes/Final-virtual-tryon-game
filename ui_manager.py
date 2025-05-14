@@ -893,7 +893,7 @@ class UIManager:
         # Draw navigation buttons (shapes only)
         buttons = [
             ("main_menu", "Main Menu", main_menu_active),
-            ("recalibrate", "Rescan", recalibrate_active),
+            # ("recalibrate", "Rescan", recalibrate_active),
             # ("exit", "Exit", exit_active)
         ]
 

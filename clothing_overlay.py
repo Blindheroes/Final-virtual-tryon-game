@@ -6,6 +6,7 @@ Handles virtual clothing rendering and positioning
 import cv2
 import numpy as np
 import os
+import textwrap
 
 
 class ClothingOverlay:
@@ -17,16 +18,58 @@ class ClothingOverlay:
         # Current clothing items
         self.current_top = None
         self.current_bottom = None
+        self.current_right_sleeve = None
+        self.current_left_sleeve = None
         self.top_images = []
         self.bottom_images = []
+        self.right_sleeve_images = []
+        self.left_sleeve_images = []
         self.top_index = 0
         self.bottom_index = 0
         self.current_clothing_images = []
         self.clothing_index = 0
 
-        # Clothing offsets (will be adjusted based on body position)
-        self.top_offset = (0, 0)
-        self.bottom_offset = (0, 0)
+        # Clothing positioning parameters
+        self.icon_scale = 0.15
+        self.shirt_scale = 0.8
+        self.pants_scale = 1.0
+        self.sleeve_scale = 1.0
+
+        # Recommendations text
+        self.recommendations = {
+            'ideal': {
+                'male': "Kamu dengan tubuh ideal, hampir semua jenis pakaian dapat digunakan, asalkan tetap memperhatikan "
+                        "proporsi tubuh. Pakaian dengan potongan yang pas di badan (well-fitted) sangat dianjurkan. "
+                        "Penggunaan celana slim-fit dapat membantu menonjolkan bentuk tubuh yang proporsional.",
+                'female': "Kamu dengan tubuh ideal memiliki fleksibilitas lebih dalam memilih model pakaian. Namun, tetap "
+                          "disarankan untuk memilih busana yang sesuai dengan aktivitas dan kepribadian. Pakaian yang "
+                          "menonjolkan kelebihan tubuh, seperti dress body fit, blouse, atau celana high waist, dapat "
+                          "menjadi pilihan utama."
+            },
+            'over weight': {
+                'male': "Pria bertubuh berisi sebaiknya memilih pakaian berwarna gelap seperti hitam, navy, atau abu-abu "
+                        "tua untuk memberikan efek ramping. Pakaian dengan potongan yang pas, tidak terlalu longgar atau "
+                        "ketat, sangat dianjurkan. Pilihan motif vertikal dapat membantu menciptakan ilusi tubuh yang "
+                        "lebih tinggi dan ramping. Celana dengan potongan lurus atau sedikit melebar juga dapat "
+                        "memperbaiki proporsi tubuh.",
+                'female': "Wanita dengan tubuh berisi disarankan memilih atasan oversize yang tidak terlalu menonjolkan "
+                          "lekuk tubuh. Celana high waist dapat memberikan efek pinggang yang lebih ramping. Warna-warna "
+                          "netral atau gelap pada pakaian juga dapat membantu menciptakan kesan lebih ramping. Pilihlah "
+                          "bahan pakaian yang jatuh dan hindari bahan tebal atau motif besar."
+            },
+            'under weight': {
+                'male': "Pria dengan tubuh kurus dianjurkan memilih pakaian berwarna cerah untuk menciptakan ilusi tubuh "
+                        "yang lebih berisi. Penggunaan teknik layering, seperti mengenakan jaket atau blazer di atas kaos, "
+                        "juga dapat memberikan volume tambahan pada penampilan. Pilihan pakaian sebaiknya berpotongan slim "
+                        "fit, namun tidak terlalu ketat atau longgar. Motif horizontal atau geometris lebih disarankan "
+                        "daripada motif garis vertikal, karena dapat mengurangi kesan tubuh yang terlalu ramping. Selain "
+                        "itu, bahan pakaian yang agak tebal, seperti denim, juga dapat membantu menambah dimensi pada tubuh.",
+                'female': "Wanita dengan tubuh kurus disarankan memilih atasan oversize yang tidak terlalu menonjolkan "
+                          "lekuk tubuh. Celana high waist dapat memberikan efek pinggang yang lebih ramping. Warna-warna "
+                          "netral atau gelap pada pakaian juga dapat membantu menciptakan kesan lebih ramping. Pilihlah "
+                          "bahan pakaian yang jatuh dan hindari bahan tebal atau motif besar."
+            }
+        }
 
     def load_clothing_for_body_type(self, gender, body_type, clothing_type='top'):
         """
@@ -40,15 +83,55 @@ class ClothingOverlay:
         Returns:
             List of clothing image paths
         """
-        clothing_folder = os.path.join(
-            self.clothing_path, body_type, gender, clothing_type)
+        # Map internal body type and gender to actual folder names
+        body_type_map = {
+            'ideal': 'ideal',
+            'over weight': 'over',
+            'under weight': 'under'
+        }
+
+        gender_map = {
+            'male': 'man',
+            'female': 'woman'
+        }
+
+        # Get folder name based on body type and gender
+        body_type_folder = body_type_map.get(body_type, 'ideal')
+        gender_folder = gender_map.get(gender, 'woman')
+        folder_name = f"{body_type_folder}-{gender_folder}"
+
+        clothing_folder = os.path.join(self.clothing_path, folder_name)
         clothing_files = []
 
         # Check if the path exists
         if os.path.exists(clothing_folder):
             for file in os.listdir(clothing_folder):
-                if file.endswith(('.png', '.jpg', '.jpeg')):
-                    clothing_files.append(os.path.join(clothing_folder, file))
+                if file.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    full_path = os.path.join(clothing_folder, file)
+
+                    # Filter files based on clothing type
+                    if clothing_type == 'top':
+                        # Skip files that are clearly bottoms or sleeves
+                        if any(bottom_keyword in file.lower() for bottom_keyword in ['pants', 'jeans', 'skirt', 'bottom', 'highwaist']):
+                            continue
+                        # Skip arm/sleeve files
+                        if any(arm_keyword in file.lower() for arm_keyword in ['arm', 'sleeve']):
+                            continue
+                    elif clothing_type == 'bottom':
+                        # Only include files that are clearly bottoms
+                        if any(bottom_keyword in file.lower() for bottom_keyword in ['pants', 'jeans', 'skirt', 'bottom', 'highwaist']):
+                            clothing_files.append(full_path)
+                    else:
+                        clothing_files.append(full_path)
+
+            # If we didn't find any clothing items with the specific filters, include all images as a fallback
+            if len(clothing_files) == 0 and clothing_type == 'top':
+                for file in os.listdir(clothing_folder):
+                    if file.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        # Skip arm/sleeve files
+                        if not any(arm_keyword in file.lower() for arm_keyword in ['arm', 'sleeve']):
+                            clothing_files.append(
+                                os.path.join(clothing_folder, file))
 
         return clothing_files
 
@@ -75,11 +158,59 @@ class ClothingOverlay:
         if len(self.bottom_images) > 0:
             self.current_bottom = self.bottom_images[0]
 
+        # Attempt to load sleeve images if they exist
+        # This is based on naming conventions - might need adjustment for specific files
+        self.current_right_sleeve = self.find_matching_sleeve_file(
+            self.current_top, 'right')
+        self.current_left_sleeve = self.find_matching_sleeve_file(
+            self.current_top, 'left')
+
+    def find_matching_sleeve_file(self, top_file, side):
+        """Find matching sleeve file based on top filename"""
+        if not top_file:
+            return None
+
+        directory = os.path.dirname(top_file)
+        base_name = os.path.basename(top_file).split('.')[0]
+
+        # Common naming patterns for sleeve files based on actual files in the project
+        patterns = [
+            f"{base_name}-arm-{side}.png",  # e.g. pololo-arm-left.png
+            f"{base_name}-arm{side}.png",   # e.g. blouse-armleft.png
+            f"{base_name}-sleeve-{side}.png",
+            f"arm-{side}.png",
+            f"arm-{side} 1.png",            # e.g. arm-denim 1.png
+            f"arm-{side} 2.png",            # e.g. arm-denim 2.png
+            f"dark-shirt-arm-{side}.png",   # For over-woman folder
+            f"dark-shirt-arm{side}.png",
+            f"dark-denim-arm-{side}.png",   # For over-man folder
+            f"dark-denim-arm{side}.png",
+            f"{side}-sleeve.png"
+        ]
+
+        # First try to find direct matches in the same directory
+        for pattern in patterns:
+            path = os.path.join(directory, pattern)
+            if os.path.exists(path):
+                return path
+
+        # Look for any arm file in the directory
+        for file in os.listdir(directory):
+            if 'arm' in file.lower() and side.lower() in file.lower() and file.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                return os.path.join(directory, file)
+
+        return None
+
     def next_clothing(self, clothing_type='top'):
         """Switch to the next clothing item"""
         if clothing_type == 'top' and len(self.top_images) > 0:
             self.top_index = (self.top_index + 1) % len(self.top_images)
             self.current_top = self.top_images[self.top_index]
+            # Update sleeves when top changes
+            self.current_right_sleeve = self.find_matching_sleeve_file(
+                self.current_top, 'right')
+            self.current_left_sleeve = self.find_matching_sleeve_file(
+                self.current_top, 'left')
             return self.top_index
         elif clothing_type == 'bottom' and len(self.bottom_images) > 0:
             self.bottom_index = (self.bottom_index +
@@ -93,6 +224,11 @@ class ClothingOverlay:
         if clothing_type == 'top' and len(self.top_images) > 0:
             self.top_index = (self.top_index - 1) % len(self.top_images)
             self.current_top = self.top_images[self.top_index]
+            # Update sleeves when top changes
+            self.current_right_sleeve = self.find_matching_sleeve_file(
+                self.current_top, 'right')
+            self.current_left_sleeve = self.find_matching_sleeve_file(
+                self.current_top, 'left')
             return self.top_index
         elif clothing_type == 'bottom' and len(self.bottom_images) > 0:
             self.bottom_index = (self.bottom_index -
@@ -107,297 +243,69 @@ class ClothingOverlay:
             return self.current_top
         elif clothing_type == 'bottom' and len(self.bottom_images) > 0:
             return self.current_bottom
+        elif clothing_type == 'right_sleeve':
+            return self.current_right_sleeve
+        elif clothing_type == 'left_sleeve':
+            return self.current_left_sleeve
         return None
 
-    def _convert_to_grayscale_preserving_alpha(self, image):
-        """
-        Convert a color image to grayscale while preserving the alpha channel
+    def roundedRect(self, img, top_left, bottom_right, color, radius):
+        """Draw a rounded rectangle on the image"""
+        x1, y1 = top_left
+        x2, y2 = bottom_right
 
-        Args:
-            image: Input RGBA image
+        cv2.rectangle(img, (x1 + radius, y1), (x2 - radius, y2),
+                      color, thickness=cv2.FILLED)
+        cv2.rectangle(img, (x1, y1 + radius), (x2, y2 - radius),
+                      color, thickness=cv2.FILLED)
 
-        Returns:
-            Grayscale image with alpha channel preserved
-        """
-        # Check if image has an alpha channel
-        if image.shape[2] == 4:
-            # Split the image into color and alpha channels
-            rgb = image[:, :, :3]
-            alpha = image[:, :, 3]
+        cv2.circle(img, (x1 + radius, y1 + radius),
+                   radius, color, thickness=cv2.FILLED)
+        cv2.circle(img, (x2 - radius, y1 + radius),
+                   radius, color, thickness=cv2.FILLED)
+        cv2.circle(img, (x1 + radius, y2 - radius),
+                   radius, color, thickness=cv2.FILLED)
+        cv2.circle(img, (x2 - radius, y2 - radius),
+                   radius, color, thickness=cv2.FILLED)
 
-            # Convert the color channels to grayscale
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    def textWrap(self, frame, text, x, y, max_chars_per_line,
+                 font=cv2.FONT_HERSHEY_SIMPLEX,
+                 font_scale=0.5,
+                 thickness=1,
+                 color_text=(255, 255, 255),
+                 color_bg=(0, 0, 0),
+                 padding=20,
+                 alpha=0.5,
+                 max_lines=5,
+                 radius=20):
+        """Draw wrapped text with a rounded rectangle background"""
+        wrapped_lines = textwrap.wrap(text, width=max_chars_per_line)
+        if len(wrapped_lines) > max_lines:
+            wrapped_lines = wrapped_lines[:max_lines]
 
-            # Create a new grayscale image with the alpha channel
-            grayscale = np.zeros(
-                (image.shape[0], image.shape[1], 4), dtype=np.uint8)
-            grayscale[:, :, 0] = gray
-            grayscale[:, :, 1] = gray
-            grayscale[:, :, 2] = gray
-            grayscale[:, :, 3] = alpha
+        line_sizes = [cv2.getTextSize(line, font, font_scale, thickness)[
+            0] for line in wrapped_lines]
+        text_width = max(size[0] for size in line_sizes)
+        line_height = line_sizes[0][1]
 
-            return grayscale
-        else:
-            # If no alpha channel, just convert to grayscale
-            return cv2.cvtColor(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        rect_x1 = x - padding
+        rect_y1 = y - line_height - padding
+        rect_x2 = x + text_width + padding
+        rect_y2 = y + len(wrapped_lines) * line_height + padding
 
-    def overlay_clothing(self, frame, body_landmarks=None):
-        """
-        Overlay clothing on the person in the frame
+        overlay = frame.copy()
 
-        Args:
-            frame: Input frame
-            body_landmarks: MediaPipe pose landmarks (optional)
+        self.roundedRect(overlay, (rect_x1, rect_y1),
+                         (rect_x2, rect_y2), color_bg, radius)
 
-        Returns:
-            Frame with clothing overlay
-        """
-        result_frame = frame.copy()
+        cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
-        # Get current clothing
-        top_path = self.get_current_clothing('top')
-        bottom_path = self.get_current_clothing('bottom')
+        for i, line in enumerate(wrapped_lines):
+            line_y = y + i * (line_height + 5)
+            cv2.putText(frame, line, (x, line_y), font,
+                        font_scale, color_text, thickness)
 
-        try:
-            # Load top clothing image with alpha channel
-            if top_path:
-                top_img = cv2.imread(top_path, cv2.IMREAD_UNCHANGED)
-                if top_img is not None:
-                    result_frame = self._overlay_clothing_item(
-                        result_frame, top_img, body_landmarks, 'top')
-
-            # Load bottom clothing image with alpha channel
-            if bottom_path:
-                bottom_img = cv2.imread(bottom_path, cv2.IMREAD_UNCHANGED)
-                if bottom_img is not None:
-                    result_frame = self._overlay_clothing_item(
-                        result_frame, bottom_img, body_landmarks, 'bottom')
-
-            # Add clothing info
-            top_name = os.path.basename(top_path).split('.')[
-                0] if top_path else "None"
-            bottom_name = os.path.basename(bottom_path).split('.')[
-                0] if bottom_path else "None"
-            cv2.putText(result_frame, f"Top: {top_name}, Bottom: {bottom_name}",
-                        (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6, (220, 220, 220), 1, cv2.LINE_AA)
-
-        except Exception as e:
-            print(f"Error overlaying clothing: {e}")
-
-        return result_frame
-
-    def _overlay_clothing_item(self, frame, clothing_img, body_landmarks, clothing_type):
-        """
-        Overlay a single clothing item on the person in the frame
-
-        Args:
-            frame: Input frame
-            clothing_img: Clothing image with alpha channel
-            body_landmarks: MediaPipe pose landmarks (optional)
-            clothing_type: 'top' or 'bottom'
-
-        Returns:
-            Frame with clothing item overlay
-        """
-        result_frame = frame.copy()
-        h, w = frame.shape[:2]
-
-        # Import needed for mediapipe landmarks
-        import mediapipe as mp
-        mp_pose = mp.solutions.pose
-
-        # If we have body landmarks, use them for better positioning
-        if body_landmarks is not None and body_landmarks.pose_landmarks:
-            lm = body_landmarks.pose_landmarks.landmark
-
-            # Define scaling factors
-            shirt_scale = 0.55
-            pants_scale = 1.5
-            offset_y = -20
-
-            if clothing_type == 'top':
-                # Extract shoulder landmarks
-                left_shoulder = np.array([
-                    lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x * w,
-                    lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y * h
-                ], dtype=np.float32)
-                right_shoulder = np.array([
-                    lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x * w,
-                    lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y * h
-                ], dtype=np.float32)
-
-                # Extract hip landmarks for the bottom of the shirt
-                left_hip = np.array([
-                    lm[mp_pose.PoseLandmark.LEFT_HIP.value].x * w,
-                    lm[mp_pose.PoseLandmark.LEFT_HIP.value].y * h
-                ], dtype=np.float32)
-                right_hip = np.array([
-                    lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x * w,
-                    lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y * h
-                ], dtype=np.float32)
-                mid_hip = (left_hip + right_hip) / 2.0
-
-                left_ankle = np.array([
-                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
-                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h
-                ], dtype=np.float32)
-                right_ankle = np.array([
-                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x * w,
-                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y * h
-                ], dtype=np.float32)
-                mid_ankle = (left_ankle + right_ankle) / 2.0
-
-                # Define destination points for the shirt
-                pts_dst = np.float32([
-                    left_shoulder + np.array([0, offset_y]),
-                    right_shoulder + np.array([0, offset_y]),
-                    # mid_hip
-                    mid_ankle
-                ])
-
-                # Apply scaling relative to the center
-                center = (left_shoulder + right_shoulder) / 2.0
-                pts_dst_scaled = center + shirt_scale * (pts_dst - center)
-
-                # Define source triangle points from the shirt image
-                shirt_h, shirt_w = clothing_img.shape[:2]
-                pts_src = np.float32([
-                    [shirt_w * 0.3, 0],        # Left shoulder point
-                    [shirt_w * 0.7, 0],        # Right shoulder point
-                    [shirt_w * 0.5, shirt_h]   # Bottom center of shirt
-                ])
-
-                # Compute affine transformation and warp the shirt
-                M = cv2.getAffineTransform(pts_src, pts_dst_scaled)
-                warped_clothing = cv2.warpAffine(clothing_img, M, (w, h),
-                                                 flags=cv2.INTER_LINEAR,
-                                                 borderMode=cv2.BORDER_TRANSPARENT)
-
-                # Overlay the warped shirt on the frame
-                result_frame = self._overlay_image(
-                    result_frame, warped_clothing)
-
-            elif clothing_type == 'bottom':
-                # Extract hip landmarks
-                left_hip = np.array([
-                    lm[mp_pose.PoseLandmark.LEFT_HIP.value].x * w,
-                    lm[mp_pose.PoseLandmark.LEFT_HIP.value].y * h
-                ], dtype=np.float32)
-                right_hip = np.array([
-                    lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x * w,
-                    lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y * h
-                ], dtype=np.float32)
-
-                # Extract ankle landmarks
-                left_ankle = np.array([
-                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
-                    lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h
-                ], dtype=np.float32)
-                right_ankle = np.array([
-                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x * w,
-                    lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y * h
-                ], dtype=np.float32)
-                mid_ankle = (left_ankle + right_ankle) / 2.0
-
-                # Define destination points for the pants
-                pts_dst = np.float32([left_hip, right_hip, mid_ankle])
-
-                # Apply scaling relative to the center
-                center = (left_hip + right_hip) / 2.0
-                pts_dst_scaled = center + pants_scale * (pts_dst - center)
-
-                # Define source triangle points for the pants
-                pants_h, pants_w = clothing_img.shape[:2]
-                pts_src = np.float32([
-                    [pants_w * 0.3, 0],        # Left hip point
-                    [pants_w * 0.7, 0],        # Right hip point
-                    [pants_w * 0.5, pants_h]   # Bottom center of pants
-                ])
-
-                # Compute affine transformation and warp the pants
-                M = cv2.getAffineTransform(pts_src, pts_dst_scaled)
-                warped_clothing = cv2.warpAffine(clothing_img, M, (w, h),
-                                                 flags=cv2.INTER_LINEAR,
-                                                 borderMode=cv2.BORDER_TRANSPARENT)
-
-                # Overlay the warped pants on the frame
-                result_frame = self._overlay_image(
-                    result_frame, warped_clothing)
-
-        else:
-            # If no body landmarks, use simple positioning
-            clothing_h, clothing_w = clothing_img.shape[:2]
-
-            if clothing_type == 'top':
-                # Default position for top in center
-                x_offset = (w - clothing_w) // 2
-                y_offset = h // 3  # Position at about 1/3 from top
-                self.top_offset = (x_offset, y_offset)
-
-                # Simple alpha blending
-                self._alpha_blend(
-                    result_frame, clothing_img, x_offset, y_offset)
-
-            elif clothing_type == 'bottom':
-                # Default position for bottom
-                x_offset = (w - clothing_w) // 2
-                y_offset = h // 2  # Position at about middle of frame
-                self.bottom_offset = (x_offset, y_offset)
-
-                # Simple alpha blending
-                self._alpha_blend(
-                    result_frame, clothing_img, x_offset, y_offset)
-
-        return result_frame
-
-    def _alpha_blend(self, background, foreground, x_offset, y_offset):
-        """
-        Alpha blend foreground onto background at specified position
-
-        Args:
-            background: Background image (modified in-place)
-            foreground: Foreground image with alpha channel
-            x_offset: X position
-            y_offset: Y position
-        """
-        # Get dimensions
-        bg_h, bg_w = background.shape[:2]
-        fg_h, fg_w = foreground.shape[:2]
-
-        # Calculate the region where the foreground will be placed
-        x_start = max(0, x_offset)
-        y_start = max(0, y_offset)
-        x_end = min(bg_w, x_offset + fg_w)
-        y_end = min(bg_h, y_offset + fg_h)
-
-        # Calculate corresponding region in foreground image
-        fg_x_start = max(0, -x_offset)
-        fg_y_start = max(0, -y_offset)
-        fg_x_end = fg_x_start + (x_end - x_start)
-        fg_y_end = fg_y_start + (y_end - y_start)
-
-        # Extract regions
-        roi = background[y_start:y_end, x_start:x_end]
-
-        # Check if foreground has alpha channel
-        if foreground.shape[2] == 4:
-            fg_region = foreground[fg_y_start:fg_y_end,
-                                   fg_x_start:fg_x_end, :3]
-            alpha = foreground[fg_y_start:fg_y_end,
-                               fg_x_start:fg_x_end, 3] / 255.0
-
-            # Alpha blending
-            for c in range(3):
-                roi[:, :, c] = (1 - alpha) * roi[:, :, c] + \
-                    alpha * fg_region[:, :, c]
-        else:
-            # No alpha channel, direct copy
-            foreground_region = foreground[fg_y_start:fg_y_end,
-                                           fg_x_start:fg_x_end]
-            roi[:] = foreground_region
-
-    def _overlay_image(self, background, foreground):
+    def overlay_image(self, background, foreground):
         """
         Overlay foreground image on background using the alpha channel
 
@@ -408,40 +316,279 @@ class ClothingOverlay:
         Returns:
             Combined image
         """
-        # Create a copy of the background to avoid modifying the original
-        result = background.copy()
-
-        # Check if foreground has an alpha channel
         if foreground.shape[2] == 4:
-            # Get the alpha channel
-            alpha = foreground[:, :, 3] / 255.0
-
-            # Get the RGB channels
+            # Separate the color and alpha channels
             fg_rgb = foreground[:, :, :3]
+            alpha_mask = foreground[:, :, 3] / 255.0
 
-            # Create an alpha mask with 3 channels
-            alpha_3channel = np.stack([alpha, alpha, alpha], axis=2)
-
-            # Blend using the alpha mask
-            result = result * (1 - alpha_3channel) + fg_rgb * alpha_3channel
-
+            # Blend the foreground and background
+            for c in range(3):
+                background[:, :, c] = alpha_mask * fg_rgb[:, :,
+                                                          c] + (1 - alpha_mask) * background[:, :, c]
         else:
-            # No alpha channel, use simple blending
-            result = cv2.addWeighted(background, 0.5, foreground, 0.5, 0)
+            background = cv2.addWeighted(background, 1, foreground, 0.5, 0)
 
-        return result.astype(np.uint8)
+        return background
 
-        # # DARI BERYL
-        # result = background.copy()
+    def sleeves(self, frame, sleeve_img, shoulder, elbow, wrist, scale=1.0, offset=np.array([0, 0])):
+        """Render sleeves based on arm positioning"""
+        if sleeve_img is None:
+            return frame
 
-        # if foreground.shape[2] == 4:
-        #     # Separate the color and alpha channels.
-        #     fg_rgb = foreground[:, :, :3]
-        #     alpha_mask = foreground[:, :, 3] / 255.0
-        #     # Blend the foreground and background.
-        #     for c in range(3):
-        #         result[:, :, c] = alpha_mask * fg_rgb[:, :, c] + \
-        #             (1 - alpha_mask) * background[:, :, c]
-        # else:
-        #     result = cv2.addWeighted(background, 1, foreground, 0.5, 0)
-        # return result
+        h_sleeve, w_sleeve = sleeve_img.shape[:2]
+        half_h = h_sleeve // 2
+
+        pts_src_upper = np.float32([
+            [0, 0],
+            [w_sleeve, 0],
+            [w_sleeve / 2, half_h]
+        ])
+        pts_src_lower = np.float32([
+            [0, 0],
+            [w_sleeve, 0],
+            [w_sleeve / 2, half_h]
+        ])
+
+        shoulder = (shoulder + offset).astype(np.float32)
+        elbow = (elbow + offset).astype(np.float32)
+        wrist = (wrist + offset).astype(np.float32)
+
+        # Create direction vectors
+        dir_upper = elbow - shoulder
+        dir_upper_norm = np.linalg.norm(dir_upper)
+        if dir_upper_norm > 0:
+            dir_upper /= dir_upper_norm
+            perp_upper = np.array(
+                [-dir_upper[1], dir_upper[0]]) * 40  # width = 80
+
+            # Build triangles dynamically
+            pts_dst_upper = np.float32([
+                shoulder - perp_upper,
+                shoulder + perp_upper,
+                elbow
+            ])
+
+            upper_half = sleeve_img[0:half_h]
+
+            M_upper = cv2.getAffineTransform(pts_src_upper, pts_dst_upper)
+            warped_upper = cv2.warpAffine(upper_half, M_upper, (frame.shape[1], frame.shape[0]),
+                                          flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
+
+            frame = self.overlay_image(frame, warped_upper)
+
+        # Lower arm section
+        dir_lower = wrist - elbow
+        dir_lower_norm = np.linalg.norm(dir_lower)
+        if dir_lower_norm > 0:
+            dir_lower /= dir_lower_norm
+            perp_lower = np.array(
+                [-dir_lower[1], dir_lower[0]]) * 40  # width = 80
+
+            pts_dst_lower = np.float32([
+                elbow - perp_lower,
+                elbow + perp_lower,
+                wrist
+            ])
+
+            lower_half = sleeve_img[half_h:]
+
+            M_lower = cv2.getAffineTransform(pts_src_lower, pts_dst_lower)
+            warped_lower = cv2.warpAffine(lower_half, M_lower, (frame.shape[1], frame.shape[0]),
+                                          flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
+
+            frame = self.overlay_image(frame, warped_lower)
+
+        return frame
+
+    def overlay_clothing(self, frame, body_landmarks=None, gender='female', body_type='ideal'):
+        """
+        Overlay clothing on the person in the frame
+
+        Args:
+            frame: Input frame
+            body_landmarks: MediaPipe pose landmarks
+            gender: 'male' or 'female'
+            body_type: 'ideal', 'under weight', or 'over weight'
+
+        Returns:
+            Frame with clothing overlay
+        """
+        result_frame = frame.copy()
+
+        # Import needed for mediapipe landmarks
+        import mediapipe as mp
+        mp_pose = mp.solutions.pose
+
+        if body_landmarks and body_landmarks.pose_landmarks:
+            h, w = frame.shape[:2]
+            lm = body_landmarks.pose_landmarks.landmark
+
+            # Extract landmarks
+            left_shoulder = np.array([
+                lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x * w,
+                lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y * h
+            ], dtype=np.float32)
+
+            right_shoulder = np.array([
+                lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x * w,
+                lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y * h
+            ], dtype=np.float32)
+
+            left_hip = np.array([
+                lm[mp_pose.PoseLandmark.LEFT_HIP.value].x * w,
+                lm[mp_pose.PoseLandmark.LEFT_HIP.value].y * h
+            ], dtype=np.float32)
+
+            right_hip = np.array([
+                lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x * w,
+                lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y * h
+            ], dtype=np.float32)
+
+            mid_hip = (left_hip + right_hip) / 2.0
+
+            left_ankle = np.array([
+                lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x * w,
+                lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y * h
+            ], dtype=np.float32)
+
+            right_ankle = np.array([
+                lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x * w,
+                lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y * h
+            ], dtype=np.float32)
+
+            mid_ankle = (left_ankle + right_ankle) / 2.0
+
+            right_elbow = np.array([
+                lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x * w,
+                lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y * h
+            ], dtype=np.float32)
+
+            left_elbow = np.array([
+                lm[mp_pose.PoseLandmark.LEFT_ELBOW.value].x * w,
+                lm[mp_pose.PoseLandmark.LEFT_ELBOW.value].y * h
+            ], dtype=np.float32)
+
+            right_wrist = np.array([
+                lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].x * w,
+                lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].y * h
+            ], dtype=np.float32)
+
+            left_wrist = np.array([
+                lm[mp_pose.PoseLandmark.LEFT_WRIST.value].x * w,
+                lm[mp_pose.PoseLandmark.LEFT_WRIST.value].y * h
+            ], dtype=np.float32)
+
+            # Load bottom clothing
+            bottom_path = self.get_current_clothing('bottom')
+            if bottom_path:
+                try:
+                    pants = cv2.imread(bottom_path, cv2.IMREAD_UNCHANGED)
+                    if pants is not None:
+                        # PANTS
+                        hip_offset_y = -40
+                        pts_dst_pants = np.float32([
+                            left_hip + np.array([0, hip_offset_y]),
+                            right_hip + np.array([0, hip_offset_y]),
+                            mid_ankle
+                        ])
+                        center_pants = (left_hip + right_hip) / 2.0
+                        pts_dst_pants_scaled = center_pants + \
+                            self.pants_scale * (pts_dst_pants - center_pants)
+
+                        pants_h, pants_w = pants.shape[:2]
+                        pts_src_pants = np.float32([
+                            [pants_w * 0.4, 0],
+                            [pants_w * 0.6, 0],
+                            [pants_w * 0.5, pants_h]
+                        ])
+
+                        M_pants = cv2.getAffineTransform(
+                            pts_src_pants, pts_dst_pants_scaled)
+                        warped_pants = cv2.warpAffine(pants, M_pants, (w, h),
+                                                      flags=cv2.INTER_LINEAR,
+                                                      borderMode=cv2.BORDER_TRANSPARENT)
+
+                        result_frame = self.overlay_image(
+                            result_frame, warped_pants)
+                except Exception as e:
+                    print(f"Error overlaying pants: {e}")
+
+            # Load top clothing
+            top_path = self.get_current_clothing('top')
+            if top_path:
+                try:
+                    shirt = cv2.imread(top_path, cv2.IMREAD_UNCHANGED)
+                    if shirt is not None:
+                        # SHIRT
+                        offset_shirt = -40
+                        pts_dst_shirt = np.float32([
+                            left_shoulder + np.array([0, offset_shirt]),
+                            right_shoulder + np.array([0, offset_shirt]),
+                            right_hip,
+                            left_hip
+                        ])
+                        center_shirt = (left_shoulder + right_shoulder) / 2.0
+                        pts_dst_shirt_scaled = center_shirt + \
+                            self.shirt_scale * (pts_dst_shirt - center_shirt)
+
+                        shirt_h, shirt_w = shirt.shape[:2]
+                        pts_src_shirt = np.float32([
+                            [shirt_w * 0.2, 0],          # kiri atas
+                            [shirt_w * 0.8, 0],          # kanan atas
+                            [shirt_w * 0.7, shirt_h],    # kanan bawah
+                            [shirt_w * 0.3, shirt_h]     # kiri bawah
+                        ])
+
+                        M_shirt = cv2.getPerspectiveTransform(
+                            pts_src_shirt, pts_dst_shirt_scaled)
+                        warped_shirt = cv2.warpPerspective(shirt, M_shirt, (w, h),
+                                                           flags=cv2.INTER_LINEAR,
+                                                           borderMode=cv2.BORDER_TRANSPARENT)
+
+                        # Draw right sleeve
+                        right_sleeve_path = self.get_current_clothing(
+                            'right_sleeve')
+                        if right_sleeve_path:
+                            try:
+                                right_sleeve = cv2.imread(
+                                    right_sleeve_path, cv2.IMREAD_UNCHANGED)
+                                if right_sleeve is not None:
+                                    result_frame = self.sleeves(
+                                        result_frame, right_sleeve,
+                                        right_shoulder, right_elbow, right_wrist,
+                                        scale=1.0, offset=np.array([0, -10])
+                                    )
+                            except Exception as e:
+                                print(f"Error overlaying right sleeve: {e}")
+
+                        # Draw left sleeve
+                        left_sleeve_path = self.get_current_clothing(
+                            'left_sleeve')
+                        if left_sleeve_path:
+                            try:
+                                left_sleeve = cv2.imread(
+                                    left_sleeve_path, cv2.IMREAD_UNCHANGED)
+                                if left_sleeve is not None:
+                                    result_frame = self.sleeves(
+                                        result_frame, left_sleeve,
+                                        left_shoulder, left_elbow, left_wrist,
+                                        scale=1.0, offset=np.array([0, -10])
+                                    )
+                            except Exception as e:
+                                print(f"Error overlaying left sleeve: {e}")
+
+                        # Draw shirt body (after sleeves)
+                        result_frame = self.overlay_image(
+                            result_frame, warped_shirt)
+                except Exception as e:
+                    print(f"Error overlaying shirt: {e}")
+
+            # Add fashion recommendations
+            if body_type in self.recommendations and gender in self.recommendations[body_type]:
+                recommendation_text = self.recommendations[body_type][gender]
+                x, y = 10, 400
+                max_chars_per_line = 75
+                self.textWrap(result_frame, recommendation_text,
+                              x, y, max_chars_per_line, font_scale=0.5)
+
+        return result_frame

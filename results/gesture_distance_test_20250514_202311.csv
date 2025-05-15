@@ -1,0 +1,7 @@
+Distance,Gesture,Trials,Successes,Accuracy
+Close (1m),Pointing,10,0,0.00%
+Close (1m),Selecting,10,10,100.00%
+Optimal (2m),Pointing,10,0,0.00%
+Optimal (2m),Selecting,10,0,0.00%
+Far (3m),Pointing,10,0,0.00%
+Far (3m),Selecting,10,0,0.00%

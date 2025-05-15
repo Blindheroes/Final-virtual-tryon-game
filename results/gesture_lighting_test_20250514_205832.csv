@@ -1,0 +1,7 @@
+Lighting,Gesture,Trials,Successes,Accuracy
+Low (~50 lux),Pointing,10,0,0.00%
+Low (~50 lux),Selecting,10,0,0.00%
+Medium (~300 lux),Pointing,10,0,0.00%
+Medium (~300 lux),Selecting,10,1,10.00%
+High (~600 lux),Pointing,10,0,0.00%
+High (~600 lux),Selecting,10,0,0.00%

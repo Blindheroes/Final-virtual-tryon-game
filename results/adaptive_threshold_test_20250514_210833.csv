@@ -1,0 +1,4 @@
+Distance,Gesture,Threshold Mode,Trials,Successes,Accuracy
+Close (1m),Pointing,Adaptive,10,0,0.00%
+Close (1m),Pointing,Fixed,10,0,0.00%
+Close (1m),Selecting,Adaptive,10,1,10.00%

@@ -1,0 +1,2 @@
+Test Type,Gesture,Filter Mode,Stability Score,False Positives,False Negatives
+Static,Pointing,Filtered,100.00%,0.00%,100.00%

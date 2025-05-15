@@ -1,0 +1,13 @@
+Test Type,Gesture,Filter Mode,Stability Score,False Positives,False Negatives
+Static,Pointing,Filtered,100.00%,0.00%,100.00%
+Static,Pointing,Unfiltered,100.00%,0.00%,100.00%
+Static,Selecting,Filtered,100.00%,0.00%,100.00%
+Static,Selecting,Unfiltered,95.97%,0.00%,4.67%
+Dynamic,Pointing,Filtered,100.00%,0.00%,100.00%
+Dynamic,Pointing,Unfiltered,100.00%,0.00%,100.00%
+Dynamic,Selecting,Filtered,95.30%,0.00%,90.00%
+Dynamic,Selecting,Unfiltered,97.99%,0.00%,94.67%
+Transitional,Pointing,Filtered,100.00%,0.00%,0.00%
+Transitional,Pointing,Unfiltered,100.00%,0.00%,28.67%
+Transitional,Selecting,Filtered,85.23%,22.00%,0.00%
+Transitional,Selecting,Unfiltered,83.22%,42.67%,0.00%

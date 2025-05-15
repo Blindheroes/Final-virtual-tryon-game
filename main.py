@@ -1,193 +1,474 @@
 """
-Virtual Try-On Game with Hand Gesture Control - Main Application
-This is the entry point for the virtual try-on application.
+Virtual Try-On Game with Hand Gesture Control
+Main application entry point
 """
 
+import os
 import cv2
-import pygame
-import sys
+import numpy as np
 import time
-from modules.hand_tracking import HandTracker
-from modules.user_interface import UserInterface
-from modules.clothing_overlay import ClothingOverlay
-from modules.body_scanner import BodyScanner
+import pygame
+
+# Import custom modules
+from ui_manager import UIManager
+from hand_tracking import HandTracker
+from body_classifier import BodyClassifier
+from clothing_overlay import ClothingOverlay
+from display_utils import create_vertical_display
+
+# Initialize pygame for sound effects
+pygame.init()
+pygame.mixer.init()
 
 
 class VirtualTryOnGame:
+    """Main application class that controls the flow of the virtual try-on game"""
+
     def __init__(self):
-        # Initialize camera
-        self.camera = cv2.VideoCapture(0)
-        if not self.camera.isOpened():
-            print("Error: Could not open camera.")
-            sys.exit()
-
-        # Get camera dimensions
-        _, frame = self.camera.read()
-        self.frame_height, self.frame_width = frame.shape[:2]
-
-        # Initialize pygame
-        pygame.init()
-        self.screen = pygame.display.set_mode(
-            (self.frame_width, self.frame_height))
-        pygame.display.set_caption("Virtual Try-On Smart Mirror")
-
-        # Initialize modules
-        self.hand_tracker = HandTracker()
-        self.ui = UserInterface(self.frame_width, self.frame_height)
-        self.clothing_overlay = ClothingOverlay()
-        self.body_scanner = BodyScanner()
-
-        # Game state variables
-        self.current_screen = "welcome"  # welcome, gender_selection, scanning, try_on
+        """Initialize the application"""
+        self.camera_index = 0
+        self.cap = None
+        self.running = False
+        self.current_screen = "calibration"
         self.gender = None
         self.body_type = None
-        self.selected_clothing = {"top": None, "bottom": None}
-        self.is_running = True
 
-        # Finger positions
-        self.pointer_pos = (0, 0)
-        self.is_selecting = False
+        # Initialize component modules
+        self.ui_manager = UIManager()
+        self.hand_tracker = HandTracker()
+        self.body_classifier = BodyClassifier()
+        self.clothing_overlay = ClothingOverlay()
 
-        # For tracking transitions
-        self.last_action_time = time.time()
-        self.action_cooldown = 0.5  # seconds
+        # Window settings
+        self.window_name = "Virtual Try-On"
+        # cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
-    def process_frame(self, frame):
-        """Process camera frame and detect hand gestures"""
-        # Mirror the frame first for the mirror effect
-        frame = cv2.flip(frame, 1)
+        # Get screen dimensions for better positioning
+        screen_width = 1280  # Default fallback width
+        screen_height = 720  # Default fallback height
 
-        # Convert frame to RGB for hand tracking
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        try:
+            # Try to get actual screen resolution
+            from screeninfo import get_monitors
+            screen = get_monitors()[0]
+            screen_width = screen.width
+            screen_height = screen.height
+        except:
+            pass
 
-        # Track hands and get gesture info
-        self.hand_tracker.process_frame(rgb_frame)
-        self.pointer_pos = self.hand_tracker.get_pointer_position()
-        self.is_selecting = self.hand_tracker.is_selecting()
+        # Set a reasonable window size (can be adjusted based on screen size)
+        window_height = int(screen_height * 0.9)  # 90% of screen height
+        # Maintain 9:16 aspect ratio
+        window_width = int(window_height * (9/16))
 
-        # Process based on current screen
-        if self.current_screen == "welcome":
-            self.ui.draw_welcome_screen(frame)
+        # kalo gambar strached, di comment aja
+        # cv2.resizeWindow(self.window_name, window_width, window_height)
+        # Center horizontally
+        # cv2.moveWindow(self.window_name, (screen_width - window_width) // 2, 0)
 
-        elif self.current_screen == "gender_selection":
-            self.ui.draw_gender_selection(
-                frame, self.pointer_pos, self.is_selecting)
+        # Toggle fullscreen if needed
+        self.fullscreen = False
+        # if self.fullscreen:
+        #     cv2.setWindowProperty(
+        #         self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-        elif self.current_screen == "scanning":
-            scan_complete = self.body_scanner.scan(frame)
-            self.ui.draw_scanning_screen(frame, scan_complete)
+        # Load audio
+        self.sound_select = pygame.mixer.Sound(
+            'UI/sounds/select.wav') if os.path.exists('UI/sounds/select.wav') else None
 
-            if scan_complete:
-                self.body_type = self.body_scanner.get_body_type()
-                self.current_screen = "try_on"
+        # Selection cooldown to prevent multiple selections
+        self.last_select_time = 0
+        self.select_cooldown = 0.5  # seconds
 
-        elif self.current_screen == "try_on":
-            # Get body measurements
-            measurements = self.body_scanner.get_measurements()
-            
-            # Apply clothing overlay
-            frame = self.clothing_overlay.apply_clothing(
-                frame,
-                self.gender,
-                self.body_type,
-                self.selected_clothing
-            )
+        # Store window dimensions for coordinate mapping
+        self.display_width = window_width
+        self.display_height = window_height
 
-            # Draw UI elements for try-on screen
-            self.ui.draw_try_on_screen(
-                frame, 
-                self.pointer_pos, 
-                self.is_selecting,
-                self.gender,
-                self.body_type,
-                measurements
-            )
+    def initialize_camera(self):
+        """Initialize the camera with vertical display ratio"""
+        self.cap = cv2.VideoCapture(self.camera_index)
+        if not self.cap.isOpened():
+            print("Error: Could not open camera.")
+            return False
 
-        # Draw pointer
-        if self.pointer_pos:
-            cv2.circle(frame, self.pointer_pos, 10, (0, 255, 0), -1)
-            if self.is_selecting:
-                cv2.circle(frame, self.pointer_pos, 15, (0, 0, 255), 2)
+        # Try to set camera to HD resolution if available
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-        return frame
+        # Get the actual camera resolution
+        cam_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        cam_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"Camera initialized successfully at {cam_width}x{cam_height}")
 
-    def check_ui_interactions(self):
-        """Check for UI button interactions"""
+        return True
+
+    def process_hand_gestures(self, frame):
+        """Process hand gestures and return pointer position and gesture state"""
+        processed_frame = self.hand_tracker.process_frame(frame)
+
+        # Get pointer position (index finger tip)
+        pointer_pos = self.hand_tracker.get_pointer_position()
+
+        # Scale pointer position to match display dimensions if needed
+        if pointer_pos:
+            h, w = frame.shape[:2]
+            x, y = pointer_pos
+
+            # # Map from camera coordinates to display coordinates
+            # x = int(x * (self.display_width / w))
+            # y = int(y * (self.display_height / h))
+            # pointer_pos = (x, y)
+
+        # Determine if selection gesture is being made
+        is_selecting = self.hand_tracker.is_selecting()
+        is_pointing = self.hand_tracker.is_pointing()
+        is_open_palm = self.hand_tracker.is_open_palm()
+
+        return processed_frame, pointer_pos, is_selecting, is_pointing, is_open_palm
+
+    def handle_calibration_screen(self, frame, pointer_pos, is_selecting):
+        """Handle interactions on the calibration screen"""
+        ui_frame = self.ui_manager.draw_calibration_screen(frame, pointer_pos)
+
+        # Check for calibration completion button press
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            if self.ui_manager.is_within_button(x, y, "calibration_complete"):
+                # Cooldown check to prevent multiple selections
+                current_time = time.time()
+                if current_time - self.last_select_time >= self.select_cooldown:
+                    self.last_select_time = current_time
+                    print("Calibration complete - moving to main menu")
+
+                    # Play selection sound if available
+                    if self.sound_select:
+                        self.sound_select.play()
+
+                    self.current_screen = "main_menu"
+
+        return ui_frame
+
+    def handle_main_menu(self, frame, pointer_pos, is_selecting):
+        """Handle interactions on the main menu screen"""
+        ui_frame = self.ui_manager.draw_main_menu(frame, pointer_pos)
+
+        # Check for button presses
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            current_time = time.time()
+
+            if current_time - self.last_select_time >= self.select_cooldown:
+                # Check which button was selected
+                if self.ui_manager.is_within_button(x, y, "body_scan"):
+                    self.last_select_time = current_time
+                    print("Body Scan selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "gender_select"
+
+                elif self.ui_manager.is_within_button(x, y, "voice_assistant"):
+                    self.last_select_time = current_time
+                    print("Voice Assistant selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "voice_assistant"
+
+                elif self.ui_manager.is_within_button(x, y, "exit"):
+                    self.last_select_time = current_time
+                    print("Exit selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.running = False
+
+        return ui_frame
+
+    def handle_gender_select(self, frame, pointer_pos, is_selecting):
+        """Handle gender selection screen"""
+        ui_frame = self.ui_manager.draw_gender_select(frame, pointer_pos)
+
+        # Check for button presses
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            current_time = time.time()
+
+            if current_time - self.last_select_time >= self.select_cooldown:
+                # Check which gender was selected
+                if self.ui_manager.is_within_button(x, y, "male"):
+                    self.last_select_time = current_time
+                    print("Male selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.gender = "male"
+                    self.current_screen = "body_scan"
+
+                elif self.ui_manager.is_within_button(x, y, "female"):
+                    self.last_select_time = current_time
+                    print("Female selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.gender = "female"
+                    self.current_screen = "body_scan"
+
+                elif self.ui_manager.is_within_button(x, y, "back"):
+                    self.last_select_time = current_time
+                    print("Back to main menu")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "main_menu"
+
+        return ui_frame
+
+    def handle_body_scan(self, frame, pointer_pos, is_selecting):
+        """Handle body scan screen and classification"""
+        # Classify body type using body classifier
+        # Use the correct methods from BodyClassifier
+        landmarks_results = self.body_classifier.detect_body_landmarks(frame)
+        self.body_type, processed_frame = self.body_classifier.classify_body_type(
+            landmarks_results, frame, self.gender)
+
+        ui_frame = self.ui_manager.draw_body_scan(
+            frame, pointer_pos, self.body_type)
+
+        # Check for button presses
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            current_time = time.time()
+
+            if current_time - self.last_select_time >= self.select_cooldown:
+                if self.ui_manager.is_within_button(x, y, "continue"):
+                    self.last_select_time = current_time
+                    print(f"Body type detected: {self.body_type}")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "virtual_tryon"
+
+                elif self.ui_manager.is_within_button(x, y, "back_from_scan"):
+                    self.last_select_time = current_time
+                    print("Back to gender select")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "gender_select"
+
+        return ui_frame
+
+    def handle_voice_assistant(self, frame, pointer_pos, is_selecting):
+        """Handle voice assistant screen"""
+        ui_frame = self.ui_manager.draw_voice_assistant(frame, pointer_pos)
+
+        # Voice assistant functionality would be implemented here
+        # For now, we'll just provide a UI to proceed to virtual try-on
+
+        # Check for button presses
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            current_time = time.time()
+
+            if current_time - self.last_select_time >= self.select_cooldown:
+                if self.ui_manager.is_within_button(x, y, "continue"):
+                    self.last_select_time = current_time
+                    print("Voice assistant completed")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    # For demo purposes, set default values
+                    self.body_type = "ideal"
+                    self.gender = "male" if not self.gender else self.gender
+                    self.current_screen = "virtual_tryon"
+
+                elif self.ui_manager.is_within_button(x, y, "back"):
+                    self.last_select_time = current_time
+                    print("Back to main menu")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "main_menu"
+
+        return ui_frame
+
+    def handle_virtual_tryon(self, frame, pointer_pos, is_selecting):
+        """Handle virtual try-on screen"""
+        # First, load clothing options for the detected body type and gender
+        # This only needs to be done once when entering this screen
+        if not hasattr(self, 'clothing_loaded') or not self.clothing_loaded:
+            print("Loading clothing options for", self.gender, self.body_type)
+            self.clothing_overlay.load_clothing_options(
+                self.gender, self.body_type)
+            # Create a flag to track if clothing is loaded
+            self.clothing_loaded = True
+            # Set the active clothing type (top or bottom)
+            self.active_clothing_type = 'top'
+
+        # Get body landmarks for better clothing placement
+        landmarks_results = self.body_classifier.detect_body_landmarks(frame)
+
+        # Apply clothing overlay based on body type and gender
+        # Pass the landmarks_results to ensure clothing follows body movements
+        tryon_frame = self.clothing_overlay.overlay_clothing(
+            frame, landmarks_results)
+
+        ui_frame = self.ui_manager.draw_virtual_tryon(
+            tryon_frame, pointer_pos, self.active_clothing_type)
+
+        # Add gesture controls for clothing navigation
+        is_pointing = self.hand_tracker.is_pointing()
+        is_open_palm = self.hand_tracker.is_open_palm()
+
+        # Use hand gestures to cycle through clothing options
         current_time = time.time()
-        if self.is_selecting and (current_time - self.last_action_time) > self.action_cooldown:
-            self.last_action_time = current_time
+        if current_time - self.last_select_time >= self.select_cooldown:
+            if is_open_palm and is_pointing:
+                self.clothing_overlay.next_clothing(self.active_clothing_type)
+                self.last_select_time = current_time
+                print(f"Next {self.active_clothing_type} item")
+            elif is_open_palm and not is_pointing:
+                self.clothing_overlay.previous_clothing(
+                    self.active_clothing_type)
+                self.last_select_time = current_time
+                print(f"Previous {self.active_clothing_type} item")
 
-            if self.current_screen == "welcome":
-                self.current_screen = "gender_selection"
+        # Check for button presses
+        if is_selecting and pointer_pos:
+            x, y = pointer_pos
+            current_time = time.time()
 
-            elif self.current_screen == "gender_selection":
-                selected = self.ui.get_gender_selection(self.pointer_pos)
-                if selected:
-                    self.gender = selected
-                    self.current_screen = "scanning"
-                    self.body_scanner.start_scan(self.gender)
+            if current_time - self.last_select_time >= self.select_cooldown:
+                if self.ui_manager.is_within_button(x, y, "top_select"):
+                    self.last_select_time = current_time
+                    print("Switch to top selection")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.active_clothing_type = 'top'
 
-            elif self.current_screen == "try_on":
-                action = self.ui.get_try_on_action(self.pointer_pos)
-                if action == "next_top":
-                    self.clothing_overlay.next_top()
-                elif action == "prev_top":
-                    self.clothing_overlay.prev_top()
-                elif action == "next_bottom":
-                    self.clothing_overlay.next_bottom()
-                elif action == "prev_bottom":
-                    self.clothing_overlay.prev_bottom()
-                elif action == "save":
-                    # Save functionality would go here
-                    pass
-                elif action == "rescan":
-                    self.current_screen = "scanning"
-                    self.body_scanner.start_scan(self.gender)
-                elif action == "exit":
-                    self.is_running = False
+                elif self.ui_manager.is_within_button(x, y, "bottom_select"):
+                    self.last_select_time = current_time
+                    print("Switch to bottom selection")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.active_clothing_type = 'bottom'
 
-    def convert_frame_to_pygame(self, frame):
-        """Convert OpenCV frame to PyGame surface"""
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # No need to flip the frame here since we already did it in process_frame
-        return pygame.surfarray.make_surface(frame.swapaxes(0, 1))
+                elif self.ui_manager.is_within_button(x, y, "main_menu"):
+                    self.last_select_time = current_time
+                    print("Back to main menu")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "main_menu"
+                    # Reset clothing loaded flag when leaving the screen
+                    self.clothing_loaded = False
+
+                elif self.ui_manager.is_within_button(x, y, "recalibrate"):
+                    self.last_select_time = current_time
+                    print("Back to calibration")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.current_screen = "calibration"
+                    # Reset clothing loaded flag when leaving the screen
+                    self.clothing_loaded = False
+
+                elif self.ui_manager.is_within_button(x, y, "exit"):
+                    self.last_select_time = current_time
+                    print("Exit selected")
+                    if self.sound_select:
+                        self.sound_select.play()
+                    self.running = False
+
+        return ui_frame
 
     def run(self):
-        """Main game loop"""
-        while self.is_running:
-            # Handle PyGame events
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.is_running = False
+        """Main application loop"""
+        if not self.initialize_camera():
+            return
 
-            # Read camera frame
-            ret, frame = self.camera.read()
+        self.running = True
+        last_time = time.time()
+        fps_values = []
+
+        while self.running:
+            # Calculate FPS
+            current_time = time.time()
+            delta_time = current_time - last_time
+            last_time = current_time
+            fps = 1.0 / delta_time if delta_time > 0 else 0
+            fps_values.append(fps)
+            if len(fps_values) > 30:  # Average over 30 frames
+                fps_values.pop(0)
+            avg_fps = sum(fps_values) / len(fps_values)
+
+            # Capture frame from camera
+            ret, frame = self.cap.read()
             if not ret:
-                print("Error: Failed to capture frame.")
+                print("Failed to capture frame from camera")
                 break
 
-            # Process frame (hand tracking, UI updates)
-            processed_frame = self.process_frame(frame)
+            # Flip horizontally for mirror effect
+            frame = cv2.flip(frame, 1)
 
-            # Check for UI interactions
-            self.check_ui_interactions()
+            # Convert to RGB for processing (MediaPipe requires RGB)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            # Convert OpenCV frame to PyGame surface and display
-            pygame_frame = self.convert_frame_to_pygame(processed_frame)
-            self.screen.blit(pygame_frame, (0, 0))
-            pygame.display.flip()
+            # Create vertical display (9:16 aspect ratio)
+            # vertical_frame = create_vertical_display(frame)
+            vertical_frame = frame
+
+            # Save original dimensions before processing for coordinate mapping
+            frame_h, frame_w = vertical_frame.shape[:2]
+
+            # Process hand gestures
+            processed_frame, pointer_pos, is_selecting, is_pointing, is_open_palm = self.process_hand_gestures(
+                vertical_frame)
+
+            # Handle current screen
+            if self.current_screen == "calibration":
+                ui_frame = self.handle_calibration_screen(
+                    vertical_frame, pointer_pos, is_selecting)
+            elif self.current_screen == "main_menu":
+                ui_frame = self.handle_main_menu(
+                    vertical_frame, pointer_pos, is_selecting)
+            elif self.current_screen == "gender_select":
+                ui_frame = self.handle_gender_select(
+                    vertical_frame, pointer_pos, is_selecting)
+            elif self.current_screen == "body_scan":
+                ui_frame = self.handle_body_scan(
+                    vertical_frame, pointer_pos, is_selecting)
+            elif self.current_screen == "voice_assistant":
+                ui_frame = self.handle_voice_assistant(
+                    vertical_frame, pointer_pos, is_selecting)
+            elif self.current_screen == "virtual_tryon":
+                ui_frame = self.handle_virtual_tryon(
+                    vertical_frame, pointer_pos, is_selecting)
+            else:
+                ui_frame = self.handle_calibration_screen(
+                    vertical_frame, pointer_pos, is_selecting)
+
+            # Add FPS counter for debugging (optional)
+            cv2.putText(ui_frame, f"FPS: {avg_fps:.1f}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+            # Display hand position (optional)
+            if pointer_pos:
+                cv2.circle(ui_frame, pointer_pos, 10, (0, 255, 0), 2)
+
+            # Display the frame without resizing
+            cv2.imshow(self.window_name, ui_frame)
+
+            # Toggle fullscreen with 'f' key
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('f'):
+                pass
+                # self.fullscreen = not self.fullscreen
+                # if self.fullscreen:
+                #     cv2.setWindowProperty(
+                #         self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                # else:
+                #     cv2.setWindowProperty(
+                #         self.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL)
+            # Exit on 'q' key press
+            elif key == ord('q'):
+                break
 
         # Clean up
-        self.camera.release()
+        self.cap.release()
+        cv2.destroyAllWindows()
         pygame.quit()
 
 
 if __name__ == "__main__":
-    try:
-        game = VirtualTryOnGame()
-        game.run()
-    except Exception as e:
-        print(f"Error: {e}")
-        cv2.destroyAllWindows()
-        pygame.quit()
-        sys.exit(1)
+    app = VirtualTryOnGame()
+    app.run()

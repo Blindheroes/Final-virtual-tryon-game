@@ -1,0 +1,45 @@
+graph TD
+    A[Akuisisi Citra] --> B[Praproses Citra]
+    B --> C[Deteksi Tangan dengan MediaPipe]
+    C --> D[Ekstraksi Landmark Tangan]
+    D --> E{Analisis Landmark}
+    E -->|Jari Telunjuk| F[Deteksi Pointer]
+    E -->|Kombinasi Jari| G[Deteksi Gestur Seleksi]
+    
+    F --> H[Interpretasi Gestur]
+    G --> H
+    
+    H --> I{Tipe Interaksi}
+    I -->|Hover| J[Update Posisi Pointer]
+    I -->|Seleksi| K[Eksekusi Perintah]
+    
+    J --> L[Render Antarmuka]
+    K --> L
+    
+    L --> M[Tampilkan ke Display]
+    M -.->|Feedback Loop| A
+    
+    subgraph "Input & Preprocessing"
+        A
+        B
+    end
+    
+    subgraph "Deteksi & Pengenalan"
+        C
+        D
+        E
+        F
+        G
+    end
+    
+    subgraph "Interpretasi & Eksekusi"
+        H
+        I
+        J
+        K
+    end
+    
+    subgraph "Output"
+        L
+        M
+    end

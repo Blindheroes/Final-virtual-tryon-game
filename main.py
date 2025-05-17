@@ -26,7 +26,7 @@ class VirtualTryOnGame:
 
     def __init__(self):
         """Initialize the application"""
-        self.camera_index = 0
+        self.camera_index = 1
         self.cap = None
         self.running = False
         self.current_screen = "calibration"
@@ -306,23 +306,6 @@ class VirtualTryOnGame:
 
         ui_frame = self.ui_manager.draw_virtual_tryon(
             tryon_frame, pointer_pos, self.active_clothing_type)
-
-        # Add gesture controls for clothing navigation
-        is_pointing = self.hand_tracker.is_pointing()
-        is_open_palm = self.hand_tracker.is_open_palm()
-
-        # Use hand gestures to cycle through clothing options
-        current_time = time.time()
-        if current_time - self.last_select_time >= self.select_cooldown:
-            if is_open_palm and is_pointing:
-                self.clothing_overlay.next_clothing(self.active_clothing_type)
-                self.last_select_time = current_time
-                print(f"Next {self.active_clothing_type} item")
-            elif is_open_palm and not is_pointing:
-                self.clothing_overlay.previous_clothing(
-                    self.active_clothing_type)
-                self.last_select_time = current_time
-                print(f"Previous {self.active_clothing_type} item")
 
         # Check for button presses
         if is_selecting and pointer_pos:
